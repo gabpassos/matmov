@@ -1,2 +1,1 @@
-print('tralala')
-print('ola')
+import ortools
