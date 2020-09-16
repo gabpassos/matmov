@@ -1,35 +1,60 @@
 from ortools.linear_solver import pywraplp
 
+#Parametros
+alfa = 1
+
 #Dados
 m = 0 ##Numero de alunos de continuidade
 n = 0 ##Numero de alunos de formulario
 
-##listaAlunos = ['458.010.638-54']
+listaAlunosContCPF = ['458.010.638-54']
+listaAlunosFormCPF = ['458.010.638-54']
 
-Xturma = [] #turma['458.010.638-54'] = ['ZO01_2A', 'ZO01_2B', 'ZO01_2C', 'ZO01_2D'] //// Aluno i é da escola 01 da regiao ZO e cursa o 2º medio
-Yturma = []
+listaTurmas = ['ZO01_2A', 'ZO01_2B', 'ZO01_2C', 'ZO01_2D', 'ZO01_2A', 'ZO01_2B', 'ZO01_2C', 'ZO01_2D']
 
-#x['458.010.638-54']['ZO01_2A']
-#for i in listaAlunos:
-#    for t in Xturma[i]:
-#        x[i][j] = MatMovModel.IntVar(0, 1, 'x[{}][{}]'.format(i, t))
-
-###Add um array com alunos nas linhas e os indices de cada turma que o aluno pode ir na coluna
-XT = []
-YT = []
+turmaAlunoCont = {'458.010.638-54': ['ZO01_2A', 'ZO01_2B', 'ZO01_2C', 'ZO01_2D']}
+turmaAlunoForm = {'458.010.638-54': ['ZO01_2A', 'ZO01_2B', 'ZO01_2C', 'ZO01_2D']}
 
 #Inicializacao do modelo
 MatMovModel = pywraplp.Solver.CreateSolver("Matematica_em_Movimento", "CBC_MIXED_INTEGER_PROGRAMMING")
 
 #####  VARIAVEIS   #####
 #Alunos de continuidade
+x = {}
+for i in listaAlunosContCPF:
+    x[i] = {}
+    for t in turmaAlunoCont[i]:
+        x[i][t] = MatMovModel.IntVar(0, 1, 'x[{}][{}]'.format(i, t))
 
 #Alunos de formulario
+y = {}
+for k in listaAlunosFormCPF:
+    y[k] = {}
+    for t in turmaAlunoForm[k]:
+        y[k][t] = MatMovModel.IntVar(0, 1, 'y[{}][{}]'.format(k, t))
 
 #Turmas
+p = {}
+for t in listaTurmas:
+    p[t] = MatMovModel.IntVar(0, 1, 'p[{}]'.format(t))
 
 #####  FUNCAO OBJETIVO  #####
 objetivo = MatMovModel.Objective()
+
+#Coef. dos alunos de continuidade: 1
+for i in listaAlunosContCPF:
+    for t in turmaAlunoCont[i]:
+        objetivo.SetCoefficient(x[i][t], 1)
+
+#Coef. dos alunos de formulario: 1
+for k in listaAlunosFormCPF:
+    for t in turmaAlunoForm[k]:
+        objetivo.SetCoefficient(y[k][t], 1)
+
+#Coef. das turmas: -1 (OBS: aqui é um bom lugar para priorizar as turmas mais novas(usar os pesos da tabela SERIE/ORDEM).
+#Tentar implementar um vetor de pesos que possa levar em consideração a demanda do tipo de turma
+for t in listaTurmas:
+    objetivo.SetCoefficient(p[t], -1)
 
 #####  RESTRICOES  #####
 
