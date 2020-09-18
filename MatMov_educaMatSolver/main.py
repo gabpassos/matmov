@@ -1,7 +1,5 @@
 from ortools.linear_solver import pywraplp
 
-import numpy as np #Mudar tudo o que usa numpy para listas.
-
 #Parametros
 alfa = 1
 
@@ -160,32 +158,54 @@ tempo_solver = MatMovModel.wall_time()
 #Tempo de execução do solver
 #Função objetivo
 
-if (status == pywraplp.Solver.OPTIMAL):
-    print('\nSOLUÇÃO:')
+
+if status == pywraplp.Solver.OPTIMAL:
+    print('\nSOLUÇÃO ÓTIMA:')
     print('Número ótimo de alunos que a ONG contemplará : ',MatMovModel.Objective().Value())
     print('Tempo total de uso do solver: ', tempo_solver*(10**(-3)),'s')
+elif status == pywraplp.Solver.FEASIBLE:
+    print('\nSOLUÇÃO FACTÍVEL:')
+    print('Número ótimo de alunos que a ONG contemplará : ',MatMovModel.Objective().Value())
+    print('Tempo total de uso do solver: ', tempo_solver*(10**(-3)),'s')
+elif status == pywraplp.Solver.UNBOUNDED:
+    print('\nPROBLEMA ILIMITADO')
+elif status == pywraplp.Solver.INFEASIBLE:
+    print('\nPROBLEMA INFACTÍVEL')
 else:
-    print('Solução infactível')
+    print('status?????')
 
 #Número turmas abertas
-Nta = np.zeros((1,1))
-for t in turmas:
-    Nta = sum([turmas *p[t].solution_value()])
-    print('Número de turmas abertas:')
-    print(Nta)
+somaTurmas = 0
+for escola in listaTurmas.keys():
+    for serie in listaTurmas[escola].keys():
+        turmas = listaTurmas[escola][serie][0]
+        somaTurmas = somaTurmas + sum([p[t].solution_value() for t in turmas])
+
+print('Número de turmas abertas: ', somaTurmas)
 
 #Quais turmas estao abertas ou fechadas
-
-ta = np.zeros((turmas,1))
-for t in turmas:
-    if p[t].solution_value()==1:
-        print ('Turma Aberta')
-    else:
-        print ('Turma Fechada')
+for escola in listaTurmas.keys():
+    for serie in listaTurmas[escola].keys():
+        turmas = listaTurmas[escola][serie][0]
+        for t in turmas:
+            if p[t].solution_value()==1:
+                print ('Turma ', t, ' Aberta')
+            else:
+                print ('Turma ', t, ' Fechada')
 
 #Marcar turmas de sugestão
+
 #Custo (uso da verba)
-Custo = MatMovModel.Add(100*(sum(X) + sum(Y)) + 400*sum(P))
-print('O custo é: ', Custo)
+X = [x[i][t].solution_value() for i in alunosCont.keys() for t in alunoCont[i]]
+Y = [y[k][t].solution_value() for k in alunosForm.keys() for t in alunoForm[k]]
+P = []
+for escola in listaTurmas.keys():
+    for serie in listaTurmas[escola].keys():
+        turmas = listaTurmas[escola][serie][0]
+        for t in turmas:
+            P.append(p[t].solution_value())
+
+custo = 100*(sum(X) + sum(Y)) + 400*sum(P)
+print('O custo é: ', custo)
 
 #Representar a distribuição dos alunos nas turmas
