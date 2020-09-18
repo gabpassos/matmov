@@ -1,5 +1,7 @@
 from ortools.linear_solver import pywraplp
 
+import numpy as np #Mudar tudo o que usa numpy para listas.
+
 #Parametros
 alfa = 1
 
@@ -151,7 +153,7 @@ for zona in listaTurmas.keys():
 MatMovModel.Add(100*(sum(X) + sum(Y)) + 400*sum(P) <= 30000)
 
 status = MatMovModel.Solve()
-tempo_solver = MatMovModel.wall_time()  
+tempo_solver = MatMovModel.wall_time()
 
 #####  APRESENTACAO DOS DADOS  #####
 #Tipo de solução: ótima, factível, infactível
@@ -162,31 +164,28 @@ if (status == pywraplp.Solver.OPTIMAL):
     print('\nSOLUÇÃO:')
     print('Número ótimo de alunos que a ONG contemplará : ',MatMovModel.Objective().Value())
     print('Tempo total de uso do solver: ', tempo_solver*(10**(-3)),'s')
-else 
+else:
     print('Solução infactível')
 
 #Número turmas abertas
-
-  Nta = np.zeros ((1,1))
-    for t in turmas
-        Nta = sum([turmas *p[t].solution_value()])
+Nta = np.zeros((1,1))
+for t in turmas:
+    Nta = sum([turmas *p[t].solution_value()])
     print('Número de turmas abertas:')
     print(Nta)
 
 #Quais turmas estao abertas ou fechadas
 
-  ta = np.zeros ((turmas,1))
-      for t in turmas:
-          if p[t].solution_value()==1
-          print ('Turma Aberta')
-          else 
-          print ('Turma Fechada')
-   
+ta = np.zeros((turmas,1))
+for t in turmas:
+    if p[t].solution_value()==1:
+        print ('Turma Aberta')
+    else:
+        print ('Turma Fechada')
+
 #Marcar turmas de sugestão
 #Custo (uso da verba)
-
-  Custo = MatMovModel.Add(100*(sum(X) + sum(Y)) + 400*sum(P)
-  print ('O custo é:')
-  print (Custo)
+Custo = MatMovModel.Add(100*(sum(X) + sum(Y)) + 400*sum(P))
+print('O custo é: ', Custo)
 
 #Representar a distribuição dos alunos nas turmas
