@@ -24,7 +24,7 @@ W = {}
 #Inicializacao do modelo
 MatMovModel = pywraplp.Solver.CreateSolver("Matematica_em_Movimento", "CBC_MIXED_INTEGER_PROGRAMMING")
 
-#####  VARIAVEIS   #####
+#####  VARIAVEIS  #####
 #Alunos de continuidade
 x = {}
 for i, turmas in alunoCont.items():
