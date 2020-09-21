@@ -1,5 +1,3 @@
-import sqlite3
-import pandas as pd
 from datetime import datetime
 from math import ceil
 
@@ -64,25 +62,30 @@ def verificaDemandaTurmas(modelo, anoPlanejamento, otimizaNoAno, tabelaTurma, ta
                 modelo.listaTurmas[escola_id][serie_id]['turmas'].append((escola_id, serie_id, totalTurmasObrigatorias + t))
 
 #####  ALUNOS DE CONTINUIDADE  #####
-def calculaNovaSerieIdCont(serie_id, reprova, otimizaNoAno, tabelaSerie):
-    if reprova == 1 or otimizaNoAno == 1:
+def calculaNovaSerieIdCont(serie_id, reprova, otimizaNoAno, ordemUltimaSerie, tabelaSerie):
+    if reprova == 1 or otimizaNoAno == 1: #O aluno nao muda de serie
         novaSerie_id = serie_id
     else:
-        #Se ele foi aprovado, planejamos de um ano para o outro e esta no ultimo ano de curso fornecido, aluno desconsiderado do problema
-        if serie_id == tabelaSerie.tail(1).index[0]:
-            novaSerie_id = None
+        ordem = tabelaSerie['ordem'][serie_id] + 1 ##Passou de ano
+
+        if ordem <= ordemUltimaSerie:
+            novaSerie_id = tabelaSerie[(tabelaSerie['ordem'] == ordem)].index[0]
         else:
-            novaSerie_id = serie_id + 1
+            novaSerie_id = None
+
+    if (novaSerie_id != None) and (tabelaSerie['ativa'][novaSerie_id] == 0):
+        novaSerie_id = None
+
     return novaSerie_id
 
-def verificaTurmasPossiveisParaAlunoCont(cpf, escola_id, serie_id, reprova, continua, otimizaNoAno, tabelaSerie, listaTurmas):
+def verificaTurmasPossiveisParaAlunoCont(aluno_id, escola_id, serie_id, reprova, continua, otimizaNoAno, ordemUltimaSerie, tabelaSerie, listaTurmas):
     if continua == 1:
-        novaSerie_id = calculaNovaSerieIdCont(serie_id, reprova, otimizaNoAno, tabelaSerie)
+        novaSerie_id = calculaNovaSerieIdCont(serie_id, reprova, otimizaNoAno, ordemUltimaSerie, tabelaSerie)
         if novaSerie_id is None:
             turmasPossiveis = None
         else:
             turmasPossiveis = listaTurmas[escola_id][novaSerie_id]['turmas']
-            listaTurmas[escola_id][novaSerie_id]['alunosPossiveis']['cont'].append(cpf)
+            listaTurmas[escola_id][novaSerie_id]['alunosPossiveis']['cont'].append(aluno_id)
     else:
         turmasPossiveis = None
 
@@ -90,7 +93,6 @@ def verificaTurmasPossiveisParaAlunoCont(cpf, escola_id, serie_id, reprova, cont
 
 def preparaDadosAlunosContinuidade(modelo, tabelaTurma, tabelaSerie, tabelaAlunoCont, listaTurmas):
     for i in tabelaAlunoCont.index:
-        cpf = tabelaAlunoCont['cpf'][i]
         turma_id = tabelaAlunoCont['turma_id'][i]
         reprova = tabelaAlunoCont['reprova'][i]
         continua = tabelaAlunoCont['continua'][i]
@@ -98,49 +100,51 @@ def preparaDadosAlunosContinuidade(modelo, tabelaTurma, tabelaSerie, tabelaAluno
         escola_id = tabelaTurma['escola_id'][turma_id]
         serie_id = tabelaTurma['serie_id'][turma_id]
 
-        turmasPossiveis = verificaTurmasPossiveisParaAlunoCont(cpf, escola_id, serie_id, reprova, continua, modelo.otimizaNoAno, tabelaSerie, listaTurmas)
+        turmasPossiveis = verificaTurmasPossiveisParaAlunoCont(i, escola_id, serie_id, reprova, continua, modelo.otimizaNoAno, modelo.ordemUltimaSerie, tabelaSerie, listaTurmas)
         if not turmasPossiveis is None:
             if reprova == 1:
-                modelo.reprovou[cpf] = True
+                modelo.reprovou[i] = True
             else:
-                modelo.reprovou[cpf] = False
+                modelo.reprovou[i] = False
 
-            modelo.mesmaTurma[cpf] = {}
+            modelo.mesmaTurma[i] = {}
 
-            for cpf_j in modelo.alunoCont.keys():
-                j = tabelaAlunoCont.query("cpf == '{}'".format(cpf_j)).index[0] ##Assumimos que tera somente um elemento (esperamos que o front-end cuide disso)
-
+            for j in modelo.alunoCont.keys():
                 if tabelaAlunoCont['turma_id'][j] == turma_id: ##Turma do i == turma do j -> estudaram na mesma turma
-                    modelo.mesmaTurma[cpf][cpf_j] = True
-                    modelo.mesmaTurma[cpf_j][cpf] = True
+                    modelo.mesmaTurma[i][j] = True
+                    modelo.mesmaTurma[j][i] = True
                 else:
-                    modelo.mesmaTurma[cpf][cpf_j] = False
-                    modelo.mesmaTurma[cpf_j][cpf] = False
+                    modelo.mesmaTurma[i][j] = False
+                    modelo.mesmaTurma[j][i] = False
 
-            modelo.mesmaTurma[cpf][cpf] = False
-            modelo.alunoCont[cpf] = turmasPossiveis
+            modelo.mesmaTurma[i][i] = False
+            modelo.alunoCont[i] = turmasPossiveis
 
 #####  ALUNOS DE FORMULARIO  #####
-def calculaNovaSerieIdForm(serie_id, anoReferencia, anoPlanejamento, otimizaNoAno, tabelaSerie):
+def calculaNovaSerieIdForm(serie_id, anoReferencia, anoPlanejamento, otimizaNoAno, ordemUltimaSerie, tabelaSerie):
     #Ano planejamento >= anoReferencia SEMPRE
     if otimizaNoAno == 1:
         totalPassAno = anoPlanejamento - anoReferencia
     else:
         totalPassAno = anoPlanejamento - anoReferencia + 1 # + 1 para o planejamento entre anos
 
-    novaSerie_id = serie_id + totalPassAno
+    ordem = tabelaSerie['ordem'][serie_id] + totalPassAno
 
-    #Verifica se ultrapassou o limite de atendimento das series
-    if novaSerie_id > tabelaSerie.tail(1).index[0]:
+    if ordem <= ordemUltimaSerie:
+        novaSerie_id = tabelaSerie[(tabelaSerie['ordem'] == ordem)].index[0]
+
+        if tabelaSerie['ativa'][novaSerie_id] == 0:
+            novaSerie_id = None
+    else:
         novaSerie_id = None
 
     return novaSerie_id
 
-def verificaTurmasPossiveisParaAlunoForm(cpf, escola_id, serie_id, anoReferencia, anoPlanejamento, otimizaNoAno, tabelaSerie, listaTurmas):
-    novaSerie_id = calculaNovaSerieIdForm(serie_id, anoReferencia, anoPlanejamento, otimizaNoAno, tabelaSerie)
+def verificaTurmasPossiveisParaAlunoForm(aluno_id, escola_id, serie_id, anoReferencia, anoPlanejamento, otimizaNoAno, ordemUltimaSerie, tabelaSerie, listaTurmas):
+    novaSerie_id = calculaNovaSerieIdForm(serie_id, anoReferencia, anoPlanejamento, otimizaNoAno, ordemUltimaSerie, tabelaSerie)
     if not novaSerie_id is None:
         turmasPossiveis = listaTurmas[escola_id][novaSerie_id]['turmas']
-        listaTurmas[escola_id][novaSerie_id]['alunosPossiveis']['form'].append(cpf)
+        listaTurmas[escola_id][novaSerie_id]['alunosPossiveis']['form'].append(aluno_id)
     else:
         turmasPossiveis = None
 
@@ -156,42 +160,36 @@ def aluno_i_antesDo_j(dataAluno_i, dataAluno_j):
     return False
 
 def preparaDadosAlunosFormulario(modelo, tabelaSerie, tabelaAlunoForm, listaTurmas):
-    cpfRepetido = {}
     for i in tabelaAlunoForm.index:
-        cpf = tabelaAlunoForm['cpf'][i]
         escola_id = tabelaAlunoForm['escola_id'][i]
         serie_id = tabelaAlunoForm['serie_id'][i]
         dataAluno_i = tabelaAlunoForm['data_inscricao'][i]
         anoReferencia = tabelaAlunoForm['ano_referencia'][i]
 
-        if not cpf in cpfRepetido.keys():
-            cpfRepetido[cpf] = False
-        else:
-            cpfRepetido[cpf] = True
+        turmasPossiveis = verificaTurmasPossiveisParaAlunoForm(i, escola_id, serie_id, anoReferencia, modelo.anoPlanejamento, modelo.otimizaNoAno, modelo.ordemUltimaSerie, tabelaSerie, listaTurmas)
+        if not turmasPossiveis is None:
+            modelo.ordemForm[i] = {}
 
-        if not cpfRepetido[cpf]:
-            turmasPossiveis = verificaTurmasPossiveisParaAlunoForm(cpf, escola_id, serie_id, anoReferencia, modelo.anoPlanejamento, modelo.otimizaNoAno, tabelaSerie, listaTurmas)
-            if not turmasPossiveis is None:
-                modelo.ordemForm[cpf] = {}
+            for j in modelo.alunoForm.keys():
+                dataAluno_j = tabelaAlunoForm['data_inscricao'][j]
 
-                for cpf_j in modelo.alunoForm.keys():
-                    j = tabelaAlunoForm.query("cpf == '{}'".format(cpf_j)).index[0] ##Assumimos que tera somente um elemento (esperamos que o front-end cuide disso)
-                    dataAluno_j = tabelaAlunoForm['data_inscricao'][j]
+                if aluno_i_antesDo_j(dataAluno_i, dataAluno_j):
+                    modelo.ordemForm[i][j] = True
+                    modelo.ordemForm[j][i] = False
+                else:
+                    modelo.ordemForm[j][i] = True
+                    modelo.ordemForm[i][j] = False
 
-                    if aluno_i_antesDo_j(dataAluno_i, dataAluno_j):
-                        modelo.ordemForm[cpf][cpf_j] = True
-                        modelo.ordemForm[cpf_j][cpf] = False
-                    else:
-                        modelo.ordemForm[cpf_j][cpf] = True
-                        modelo.ordemForm[cpf][cpf_j] = False
-
-                modelo.ordemForm[cpf][cpf] = False
-                modelo.alunoForm[cpf] = turmasPossiveis
+            modelo.ordemForm[i][i] = False
+            modelo.alunoForm[i] = turmasPossiveis
 
 def preSolve(modelo):
     verificaDemandaTurmas(modelo, modelo.anoPlanejamento, modelo.otimizaNoAno, modelo.tabelaTurma, modelo.tabelaAlunoCont,
                         modelo.tabelaAlunoForm, modelo.tabelaSerie)
+    print("\nVerificou Demanda\n")
 
     preparaDadosAlunosContinuidade(modelo, modelo.tabelaTurma, modelo.tabelaSerie, modelo.tabelaAlunoCont, modelo.listaTurmas)
+    print("Preparou Continuidade\n")
 
     preparaDadosAlunosFormulario(modelo, modelo.tabelaSerie, modelo.tabelaAlunoForm, modelo.listaTurmas)
+    print("Preparou Form\n")
