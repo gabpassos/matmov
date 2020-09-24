@@ -3,6 +3,7 @@ from string import ascii_uppercase
 import pandas as pd
 from ortools.linear_solver import pywraplp
 
+
 import preSolver as ps
 import funcoesModelagem as fm
 
@@ -13,10 +14,6 @@ class ErroLeituraDados(Exception):
 class ErroConfiguracaoParametros(Exception):
     def __str__(self):
         return 'A configuração de parâmetros não foi realizada. Execute Modelo.configuraParametros() antes de executar o solver.'
-
-class ErroVerbaInsufParaContinuidade(Exception):
-    def __str__(self):
-        return 'A verba disponibilizada não é suficiente para atender os alunos de continuidade.'
 
 def geraNomeTurma(regiao_id, serie_id, contadorTurmas, tabelaSerie, tabelaEscola, tabelaRegiao):
     regiao = tabelaRegiao['nome'][regiao_id]
@@ -194,7 +191,7 @@ class Modelo():
         self.status = self.modelo.Solve()
 
         if self.status == pywraplp.Solver.INFEASIBLE: ##Verba insuficiente
-            raise ErroVerbaInsufParaContinuidade()
+            raise ps.ErroVerbaInsufParaContinuidade()
 
         #####  PREPARA PARA SEGUNDA ETAPA  #####
         turmaAlunoCont, turmasCont, desempateEscola = fm.confirmaSolucaoParaAlunosContinuidade(self)
@@ -310,7 +307,7 @@ class Modelo():
         self.status = self.modelo.Solve()
 
         if self.status == pywraplp.Solver.INFEASIBLE: ##Verba insuficiente
-            raise ErroVerbaInsufParaContinuidade()
+            raise ps.ErroVerbaInsufParaContinuidade()
 
         #####  PREPARA PARA SEGUNDA ETAPA  #####
         turmaAlunoCont, turmasCont, desempateEscola = fm.confirmaSolucaoParaAlunosContinuidade(self)
