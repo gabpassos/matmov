@@ -1,3 +1,6 @@
+from numpy.random import uniform
+from math import ceil
+
 #####  VARIAVEIS  #####
 #Alunos de continuidade
 def defineVariavelAlunoCont_x(self):
@@ -189,19 +192,132 @@ def confirmaSolucaoParaAlunosContinuidade(self):
 
     return alunoTurmaCont, turmasCont, desempateEscola
 
-def recalculaDemandaBaseadoNasTurmasContEOrdena(self):
+def recalculaDemandaBaseadoNasTurmasContEOrdena(self, desempateEscola):
     demanda = {}
     turmaAlunoForm = []
     for escola in self.listaTurmas.keys():
         for serie in self.listaTurmas[escola].keys():
             demanda[(escola,serie)] = self.listaTurmas[escola][serie]['demanda']
             for t in self.listaTurmas[escola][serie]['turmas']:
-                for k in self.listaTurmas[escola][serie]['alunosPossiveis']['form']:
-                    if self.y[k][t].solution_value() == 1:
-                        turmaAlunoForm.append((k,t))
-                        demanda[(escola,serie)] -= 1
+                if self.p[t].solution_value() == 1:
+                    for k in self.listaTurmas[escola][serie]['alunosPossiveis']['form']:
+                        if self.y[k][t].solution_value() == 1:
+                            turmaAlunoForm.append((k,t))
+                            demanda[(escola,serie)] -= 1
+                            desempateEscola[escola]['alunosMatriculados'] += 1
+
+    demanda = {k: v for k, v in demanda.items() if v != 0} ##Remove as demandas nulas para nao afetar criterio de desempate
+
     demandaOrdenada = {k: v for k, v in sorted(demanda.items(), key=lambda item: item[1], reverse= True)}
+
     return turmaAlunoForm, demandaOrdenada
+
+def pPrioriza_q(p, q, demandaOrdenada, desempateEscola, self):
+    #Demanda de p sera sempre maior ou igual a demanda de q (nas condicoes dos metodos implementados aqui)
+    if demandaOrdenada[p] - demandaOrdenada[q] <= 0.25*self.maxAlunos: #empate
+        escola_p = p[0]
+        serie_p = p[1]
+
+        escola_q = q[0]
+        serie_q = q[1]
+
+        if self.tabelaSerie['ordem'][serie_p] < self.tabelaSerie['ordem'][serie_q]:
+            return True
+        elif self.tabelaSerie['ordem'][serie_p] > self.tabelaSerie['ordem'][serie_q]:
+            return False
+        elif desempateEscola[escola_p]['alunosMatriculados'] < desempateEscola[escola_q]['alunosMatriculados']:
+            return True
+        elif desempateEscola[escola_p]['alunosMatriculados'] > desempateEscola[escola_q]['alunosMatriculados']:
+            return False
+        elif desempateEscola[escola_p]['totalTurmas'] < desempateEscola[escola_q]['totalTurmas']:
+            return True
+        elif desempateEscola[escola_p]['totalTurmas'] > desempateEscola[escola_q]['totalTurmas']:
+            return False
+        else: # Escolhe aleatorio
+            if uniform(0, 1) < 0.5:
+                return True
+            else:
+                return False
+
+    return True
+
+def ordenaTurmasDeFormulario(self, demandaOrdenada, desempateEscola):
+    key_order = list(demandaOrdenada.keys())
+    for c in range(len(demandaOrdenada) - 1):
+        d = c + 1
+        p = key_order[c]
+        q = key_order[d]
+        if not pPrioriza_q(p, q, demandaOrdenada, desempateEscola, self): #Se a turma q tem prioridade sobre a turma q + 1
+            aux = key_order[c]
+            key_order[c] = key_order[d]
+            key_order[d] = aux
+            demandaOrdenada = {k: demandaOrdenada[k] for k in key_order}
+
+    return demandaOrdenada
+
+def verbaDisponivel(self):
+    X = [self.x[i][t].solution_value() for i in self.alunoCont.keys() for t in self.alunoCont[i]]
+    Y = [self.y[k][t].solution_value() for k in self.alunoForm.keys() for t in self.alunoForm[k]]
+    P = []
+    for escola in self.listaTurmas.keys():
+        for serie in self.listaTurmas[escola].keys():
+            for t in self.listaTurmas[escola][serie]['turmas']:
+                P.append(self.p[t].solution_value())
+
+    return self.verba - (self.custoAluno*(sum(X) + sum(Y)) + self.custoProf*(self.qtdProfPedag + self.qtdProfAcd)*sum(P))
+
+def verificaTurmasFechadas(self, demandaOrdenada, desempateEscola):
+    if verbaDisponivel(self) < self.custoAluno + self.custoProf*(self.qtdProfPedag + self.qtdProfAcd): #Nao consegue abrir nenhuma turma
+        return None
+    elif len(demandaOrdenada) == 0: ##Todo o formulario foi atendido
+        return None
+
+    turmasAbertas = []
+    for escola in self.listaTurmas.keys():
+        for serie in self.listaTurmas[escola].keys():
+            for t in self.listaTurmas[escola][serie]['turmas']:
+                if self.p[t].solution_value() == 1:
+                    turmasAbertas.append(t)
+
+    key = list(demandaOrdenada.keys())
+    if len(key) == 1:
+        p = key[0]
+        escola = p[0]
+        serie = p[1]
+        for t in self.listaTurmas[escola][serie]['turmas']:
+            if self.p[t].solution_value() == 0:
+                turmasAbertas.append(t)
+                break
+    else:
+        p = key[0]
+        q = key[1]
+        if pPrioriza_q(p, q, demandaOrdenada, desempateEscola, self): #Se a turma q tem prioridade sobre a turma q + 1
+            ##Permite abertura de turmas suficientes para alterar a ordem de prioridade
+            qtdNovasTurmas = ceil((demandaOrdenada[p] - demandaOrdenada[q])/self.maxAlunos)
+            escola = p[0]
+            serie = p[1]
+
+            contTurmas = 0
+            for t in self.listaTurmas[escola][serie]['turmas']:
+                if contTurmas < qtdNovasTurmas and self.p[t].solution_value() == 0:
+                    turmasAbertas.append(t)
+                    contTurmas += 1
+        else:
+            escola = q[0]
+            serie = q[1]
+            for t in self.listaTurmas[escola][serie]['turmas']:
+                if self.p[t].solution_value() == 0:
+                    turmasAbertas.append(t)
+                    break
+
+    turmasFechadas = []
+    for escola in self.listaTurmas.keys():
+        for serie in self.listaTurmas[escola].keys():
+            for t in self.listaTurmas[escola][serie]['turmas']:
+                if not t in turmasAbertas:
+                    turmasFechadas.append(t)
+
+    return turmasFechadas
 
 #####  FUNCOES OBJETIVO  #####
 def objMinimizaTurmasParaContinuidade(self):

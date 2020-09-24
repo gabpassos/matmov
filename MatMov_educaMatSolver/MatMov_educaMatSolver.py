@@ -25,7 +25,7 @@ def geraNomeTurma(regiao_id, serie_id, contadorTurmas, tabelaSerie, tabelaEscola
 
     return regiao + '_' + serie + turma
 
-class Modelo:
+class Modelo():
     """Classe modelo para o problema da ONG Matematica em Movimento."""
 
     def __init__(self, databasePath= 'data/database.db', tipoSolver= 'CBC', tempoLimSolverSegundos= 3600):
@@ -64,7 +64,6 @@ class Modelo:
         #Variaveis Solver ortools
         self.modelo = None
         self.status = None
-        self.tempoTotalSolver = 0
 
         #Variaveis de decisao
         self.x = {}
@@ -165,7 +164,6 @@ class Modelo:
         fm.objSomaTodosAlunos(self)
 
         self.status = self.modelo.Solve()
-        self.tempoTotalSolver += self.modelo.wall_time()
 
     def Solver2(self):
         if not self.dadosAdicionados:
@@ -194,7 +192,6 @@ class Modelo:
 
         ##### Resolve para alunos de continuidade  #####
         self.status = self.modelo.Solve()
-        self.tempoTotalSolver += self.modelo.wall_time()
 
         if self.status == pywraplp.Solver.INFEASIBLE: ##Verba insuficiente
             raise ErroVerbaInsufParaContinuidade()
@@ -231,10 +228,10 @@ class Modelo:
 
         #####  Resolve completando as turmas de alunos de continuidade  #####
         self.status = self.modelo.Solve()
-        self.tempoTotalSolver += self.modelo.wall_time()
 
-        ### PREPARA PARA TERCEIRA ETAPA  ###   AQUII!!!!
-        turmaAlunoForm, demandaOrdenada = fm.recalculaDemandaBaseadoNasTurmasContEOrdena(self)
+        ### PREPARA PARA TERCEIRA ETAPA  ###
+        turmaAlunoForm, demandaOrdenada = fm.recalculaDemandaBaseadoNasTurmasContEOrdena(self, desempateEscola)
+        demandaOrdenada = fm.ordenaTurmasDeFormulario(self, demandaOrdenada, desempateEscola)
         self.modelo.Clear()
 
         ################################################################################################
@@ -259,24 +256,22 @@ class Modelo:
         keys = list(demandaOrdenada.keys())
         for t1 in range(len(demandaOrdenada)-1):
             t2 = t1 + 1
-            keys
             turma1 = keys[t1]
             turma2 = keys[t2]
             Y1 = []
             Y2 = []
+
             escola = turma1[0]
             serie = turma1[1]
             for t in self.listaTurmas[escola][serie]['turmas']:
-                for k in self.listaTurmas[escola][serie]['alunosPossiveis']['form']:
-                    if not (k, t) in turmaAlunoForm: ##Nao esta em uma turma obrigatoria
-                        Y1.append(self.y[k][t])
+                if self.listaTurmas[escola][serie]['aprova'][t] == 0:
+                        Y1.append(self.p[t])
 
             escola = turma2[0]
             serie = turma2[1]
             for t in self.listaTurmas[escola][serie]['turmas']:
-                for k in self.listaTurmas[escola][serie]['alunosPossiveis']['form']:
-                    if not (k, t) in turmaAlunoForm:
-                        Y2.append(self.y[k][t])
+                if self.listaTurmas[escola][serie]['aprova'][t] == 0:
+                        Y2.append(self.p[t])
 
             self.modelo.Add(sum(Y2) <= sum(Y1))
 
@@ -285,7 +280,108 @@ class Modelo:
 
         #####  Resolve liberando novas turmas e priorizando demanda #####
         self.status = self.modelo.Solve()
-        self.tempoTotalSolver += self.modelo.wall_time()
+
+    def SolverConstrutivo(self):
+        if not self.dadosAdicionados:
+            raise ErroLeituraDados()
+
+        if not self.parametrosConfigurados:
+            raise ErroConfiguracaoParametros()
+
+        ps.preSolve(self)
+
+        self.modelo = pywraplp.Solver.CreateSolver('Matematica_em_Movimento', self.tipoSolver)
+        self.modelo.SetTimeLimit(self.tempoLimiteSolver*(10**3))
+
+        ##########################################################
+        #####  PRIMEIRA ETAPA (aloca alunos de continuidade) #####
+        ##########################################################
+        ##  Variaveis  ##
+        fm.defineVariavelAlunoCont_x(self)
+        fm.defineVariavelTurma_p(self)
+
+        ##  Restricoes  ##
+        fm.restricoesEtapaContinuidade(self)
+
+        ##  Funcao Obj  ##
+        fm.objMinimizaTurmasParaContinuidade(self) #Minimizamos o total de turmas para juntar sala quando possivel
+
+        ##### Resolve para alunos de continuidade  #####
+        self.status = self.modelo.Solve()
+
+        if self.status == pywraplp.Solver.INFEASIBLE: ##Verba insuficiente
+            raise ErroVerbaInsufParaContinuidade()
+
+        #####  PREPARA PARA SEGUNDA ETAPA  #####
+        turmaAlunoCont, turmasCont, desempateEscola = fm.confirmaSolucaoParaAlunosContinuidade(self)
+        self.modelo.Clear()
+
+        ###############################################################
+        #####  SEGUNDA ETAPA (preenche com alunos de formulario)  #####
+        ###############################################################
+        ##  Variaveis  ##
+        fm.defineVariavelAlunoCont_x(self)
+        fm.defineVariavelAlunoForm_y(self)
+        fm.defineVariavelTurma_p(self)
+
+        ##  Restricoes  ##
+        fm.restricoesModeloPadrao(self) #Restricoes modelo padrao
+
+        ##  Restricoes adicionais:
+        # Aplica a solucao da primeira etapa via restricoes
+        for i, t in turmaAlunoCont:
+            self.modelo.Add(self.x[i][t] == 1)
+
+        # Mantem as turmas que nao possuem alunos de continuidade fechadas
+        for escola in self.listaTurmas.keys():
+            for serie in self.listaTurmas[escola].keys():
+                for t in self.listaTurmas[escola][serie]['turmas']:
+                    if not t in turmasCont:
+                        self.modelo.Add(self.p[t] == 0)
+
+        ##  Funcao Objetivo  ##
+        fm.objSomaTodosAlunos(self)
+
+        #####  Resolve completando as turmas de alunos de continuidade  #####
+        self.status = self.modelo.Solve()
+
+        ### PREPARA PARA TERCEIRA ETAPA  ###
+        turmaAlunoForm, demandaOrdenada = fm.recalculaDemandaBaseadoNasTurmasContEOrdena(self, desempateEscola)
+        turmasFechadas = fm.verificaTurmasFechadas(self, demandaOrdenada, desempateEscola)
+
+        ################################################################################################
+        #####  TERCEIRA ETAPA (abre turmas novas priorizando a demanda com criterio de desempate)  #####
+        ################################################################################################
+        while not turmasFechadas is None:
+            self.modelo.Clear()
+
+            ##  Variaveis  ##
+            fm.defineVariavelAlunoCont_x(self)
+            fm.defineVariavelAlunoForm_y(self)
+            fm.defineVariavelTurma_p(self)
+
+            ##  Restricoes  ##
+            fm.restricoesModeloPadrao(self) #Restricoes modelo padrao
+
+            # Aplica as solucoes da primeira e da segunda etapa via restricoes
+            for i, t in turmaAlunoCont:
+                self.modelo.Add(self.x[i][t] == 1)
+
+            for k, t in turmaAlunoForm:
+                self.modelo.Add(self.y[k][t] == 1)
+
+            for t in turmasFechadas:
+                self.modelo.Add(self.p[t] == 0)
+
+            fm.objSomaTodosAlunos(self)
+
+            ## Resolve ##
+            self.status = self.modelo.Solve()
+
+            turmaAlunoCont, turmasCont, desempateEscola = fm.confirmaSolucaoParaAlunosContinuidade(self)
+            turmaAlunoForm, demandaOrdenada = fm.recalculaDemandaBaseadoNasTurmasContEOrdena(self, desempateEscola)
+
+            turmasFechadas = fm.verificaTurmasFechadas(self, demandaOrdenada, desempateEscola)
 
     def estatisticaProblema(self):
         print('\nESTATISTICAS PROBLEMA')
@@ -310,7 +406,6 @@ class Modelo:
         print('\nVerba restante: ', self.verba - (self.custoAluno*(sum(X) + sum(Y)) + self.custoProf*(self.qtdProfPedag + self.qtdProfAcd)*sum(P)))
 
     def estatisticaSolver(self):
-
         obj = self.modelo.Objective()
         print('\nDADOS DE EXECUCAO')
 
@@ -330,8 +425,8 @@ class Modelo:
         print('Numero de restricoes: ', self.modelo.NumConstraints())
 
         ##Tempo de execucao
-        print('Tempo de execucao total do solver (ms): ', self.tempoTotalSolver)
-        print('Tempo de execucao total do solver (s): ', self.tempoTotalSolver*(10**(-3)))
+        print('Tempo de execucao total do solver (ms): ', self.modelo.WallTime())
+        print('Tempo de execucao total do solver (s): ', self.modelo.WallTime()*(10**(-3)))
 
     def exportaSolucaoSQLite(self):
         database = sqlite3.connect(self.databasePath)

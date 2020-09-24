@@ -6,7 +6,7 @@ MatMov.leituraDados()
 
 MatMov.configuraParametros()
 
-MatMov.Solver1()
+MatMov.Solver2()
 
 MatMov.estatisticaSolver()
 
