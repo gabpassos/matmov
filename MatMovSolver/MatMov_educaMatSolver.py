@@ -1,19 +1,13 @@
 import sqlite3
 from string import ascii_uppercase
+
 import pandas as pd
 from ortools.linear_solver import pywraplp
 
-
+import erros
 import preSolver as ps
 import funcoesModelagem as fm
 
-class ErroLeituraDados(Exception):
-    def __str__(self):
-        return 'A leitura de dados não foi realizada. Execute Modelo.leituraDados() antes de executar o solver.'
-
-class ErroConfiguracaoParametros(Exception):
-    def __str__(self):
-        return 'A configuração de parâmetros não foi realizada. Execute Modelo.configuraParametros() antes de executar o solver.'
 
 def geraNomeTurma(regiao_id, serie_id, contadorTurmas, tabelaSerie, tabelaEscola, tabelaRegiao):
     regiao = tabelaRegiao['nome'][regiao_id]
@@ -22,7 +16,7 @@ def geraNomeTurma(regiao_id, serie_id, contadorTurmas, tabelaSerie, tabelaEscola
 
     return regiao + '_' + serie + turma
 
-class Modelo():
+class Modelo:
     """Classe modelo para o problema da ONG Matematica em Movimento."""
 
     def __init__(self, databasePath= 'data/database.db', tipoSolver= 'CBC', tempoLimSolverSegundos= 3600):
@@ -39,8 +33,6 @@ class Modelo():
 
         self.ordemUltimaSerie = None
 
-        self.dadosAdicionados = False
-
         #Parametros do problema
         self.anoPlanejamento = None
         self.otimizaNoAno = None
@@ -52,7 +44,7 @@ class Modelo():
         self.qtdProfPedag = None
         self.qtdProfAcd = None
 
-        self.parametrosConfigurados = False
+        self.dadosParametrosConfigurados = False
 
         #Config. Solver
         self.tipoSolver = tipoSolver
@@ -75,7 +67,13 @@ class Modelo():
         self.reprovou = {}
         self.ordemForm = {}
 
-    def leituraDados(self):
+    def leituraDadosParametros(self):
+        '''
+        LEITURA DE DADOS E PARAMETROS
+
+        - Realiza a leitura de dados a partir das tabelas SQLite e os armazena no formato de pandas.DataFrame.
+        - Configura os parametros do modelo.
+        '''
         database = sqlite3.connect(self.databasePath)
 
         self.tabelaRegiao = pd.read_sql_query('SELECT * FROM regiao', database, index_col= 'id')
@@ -85,12 +83,15 @@ class Modelo():
         self.tabelaAlunoCont = pd.read_sql_query('SELECT * FROM aluno', database, index_col= 'id')
         self.tabelaAlunoForm = pd.read_sql_query('SELECT * FROM formulario_inscricao', database, index_col= 'id')
 
+        database.close()
+
         ultimaSerie_id = self.tabelaSerie[(self.tabelaSerie['ativa'] == 1)]['ordem'].idxmax()
         self.ordemUltimaSerie = self.tabelaSerie['ordem'][ultimaSerie_id]
 
+        verificaCpfRepetido(self.tabelaAlunoCont, self.tabelaAlunoForm)
+
         self.dadosAdicionados = True
 
-        database.close()
 
     def configuraParametros(self):
         database = sqlite3.connect(self.databasePath)
