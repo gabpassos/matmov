@@ -1,4 +1,4 @@
-import MatMov_educaMatSolver as MM
+import MatMovSolver as MM
 
 MatMov = MM.Modelo()
 
