@@ -4,7 +4,7 @@ from math import ceil
 
 from numpy.random import uniform
 
-import erros
+from MatMovSolver import erros
 
 def dicionarioFinalListaTurmas():
     """

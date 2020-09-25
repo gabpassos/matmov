@@ -1,20 +1,12 @@
 import sqlite3
-from string import ascii_uppercase
 
 import pandas as pd
 from ortools.linear_solver import pywraplp
 
-import erros
-import preSolver as ps
-import funcoesModelagem as fm
-
-
-def geraNomeTurma(regiao_id, serie_id, contadorTurmas, tabelaSerie, tabelaEscola, tabelaRegiao):
-    regiao = tabelaRegiao['nome'][regiao_id]
-    serie = tabelaSerie['nome'][serie_id][0]
-    turma = ascii_uppercase[contadorTurmas[regiao_id][serie_id]]
-
-    return regiao + '_' + serie + turma
+from MatMovSolver import erros
+from MatMovSolver import preSolver as ps
+from MatMovSolver import funcoesModelagem as fm
+from MatMovSolver import resultados as res
 
 class Modelo:
     """Classe modelo para o problema da ONG Matematica em Movimento."""
@@ -67,6 +59,9 @@ class Modelo:
         self.reprovou = {}
         self.ordemForm = {}
 
+        #Estatiscas do metodo
+        self.tempoExecPreSolver = 0
+
     def leituraDadosParametros(self):
         '''
         LEITURA DE DADOS E PARAMETROS
@@ -76,6 +71,7 @@ class Modelo:
         '''
         database = sqlite3.connect(self.databasePath)
 
+        ##  Dados  ##
         self.tabelaRegiao = pd.read_sql_query('SELECT * FROM regiao', database, index_col= 'id')
         self.tabelaEscola = pd.read_sql_query('SELECT * FROM escola', database, index_col= 'id')
         self.tabelaTurma = pd.read_sql_query('SELECT * FROM turma', database, index_col= 'id')
@@ -83,20 +79,8 @@ class Modelo:
         self.tabelaAlunoCont = pd.read_sql_query('SELECT * FROM aluno', database, index_col= 'id')
         self.tabelaAlunoForm = pd.read_sql_query('SELECT * FROM formulario_inscricao', database, index_col= 'id')
 
-        database.close()
-
-        ultimaSerie_id = self.tabelaSerie[(self.tabelaSerie['ativa'] == 1)]['ordem'].idxmax()
-        self.ordemUltimaSerie = self.tabelaSerie['ordem'][ultimaSerie_id]
-
-        verificaCpfRepetido(self.tabelaAlunoCont, self.tabelaAlunoForm)
-
-        self.dadosAdicionados = True
-
-
-    def configuraParametros(self):
-        database = sqlite3.connect(self.databasePath)
+        ##  Parametros - OBS: coluna valor da tabela parametro esta como VARCHAR (por isso a conversao para int) ##
         parametros = pd.read_sql_query('SELECT * FROM parametro', database, index_col= 'id')
-
         self.anoPlanejamento = int(parametros['valor'][1])
         self.otimizaNoAno = int(parametros['valor'][2])
         self.abreNovasTurmas = int(parametros['valor'][3])
@@ -107,72 +91,48 @@ class Modelo:
         self.qtdProfPedag = int(parametros['valor'][8])
         self.qtdProfAcd = int(parametros['valor'][9])
 
-        self.parametrosConfigurados = True
-
         database.close()
 
-    def Solver1(self):
-        if not self.dadosAdicionados:
-            raise ErroLeituraDados()
+        ultimaSerie_id = self.tabelaSerie[(self.tabelaSerie['ativa'] == 1)]['ordem'].idxmax()
+        self.ordemUltimaSerie = self.tabelaSerie['ordem'][ultimaSerie_id]
 
-        if not self.parametrosConfigurados:
-            raise ErroConfiguracaoParametros()
+        erros.verificaCpfRepetido(self.tabelaAlunoCont, self.tabelaAlunoForm)
 
-        ps.preSolve(self)
+        self.dadosParametrosConfigurados = True
 
-        self.modelo = pywraplp.Solver.CreateSolver('Matematica_em_Movimento_modelo1', self.tipoSolver)
+    def resolveSemPrioridade(self):
+        if not self.dadosParametrosConfigurados:
+            raise erros.ErroLeituraDadosParametros()
+
+        self.tempoExecPreSolver = ps.preSolver(self)
+
+        self.modelo = pywraplp.Solver.CreateSolver('MatMovSolver_SemPrioridade', self.tipoSolver)
         self.modelo.SetTimeLimit(self.tempoLimiteSolver*(10**3))
 
-        #####  VARIAVEIS  #####
-        #Alunos de continuidade
+        ##  Variaveis  ##
         fm.defineVariavelAlunoCont_x(self)
-
-        #Alunos de formulario
         fm.defineVariavelAlunoForm_y(self)
-
-        #Turmas
         fm.defineVariavelTurma_p(self)
 
-        #####  RESTRICOES  #####
-        # (I.a): alunos de continuidade sao matriculados em exatamente uma turma
-        fm.limiteQtdTurmasAlunoCont(self)
+        ##  Restricoes  ##
+        fm.addRestricoesModeloBase(self)
 
-        # (I.b): alunos de formulario sao matriculados em no máximo uma turma
-        fm.limiteQtdTurmasAlunoForm(self)
+        ##  Funcao Objetivo  ##
+        fm.objMaxSomaTodosAlunos(self)
 
-        # (II): atender o limite de alunos por turma se a turma estiver aberta
-        fm.limiteQtdAlunosPorTurma(self)
-
-        # (III): abrir turmas em ordem crescente
-        fm.abreTurmaEmOrdemCrescente(self)
-
-        # (IV): se nao tem aluno na turma, a turma deve ser fechada
-        fm.fechaTurmaSeNaoTemAluno(self)
-
-        # (V): o aluno de continuidade que nao reprovou deve continuar na mesma turma que os colegas
-        fm.alunoContMesmaTurmaQueColegas(self)
-
-        # (VI): priorizar alunos de formulario que se inscreveram antes
-        fm.priorizaOrdemFormulario(self)
-
-        # (VII): atender limitacao de verba
-        fm.limiteVerba(self)
-
-        #####  FUNCAO OBJETIVO  #####
-        fm.objSomaTodosAlunos(self)
-
+        ##  Resolucao do modelo  ##
         self.status = self.modelo.Solve()
 
-    def Solver2(self):
-        if not self.dadosAdicionados:
-            raise ErroLeituraDados()
+        if self.status == pywraplp.Solver.INFEASIBLE:
+            raise erros.ErroVerbaInsufParaContinuidade()
 
-        if not self.parametrosConfigurados:
-            raise ErroConfiguracaoParametros()
+    def resolveComPrioridadeParcial(self):
+        if not self.dadosParametrosConfigurados:
+            raise erros.ErroLeituraDadosParametros()
 
-        ps.preSolve(self)
+        self.tempoExecPreSolver = ps.preSolver(self)
 
-        self.modelo = pywraplp.Solver.CreateSolver('Matematica_em_Movimento', self.tipoSolver)
+        self.modelo = pywraplp.Solver.CreateSolver('MatMovSolver_PrioridadeParcial', self.tipoSolver)
         self.modelo.SetTimeLimit(self.tempoLimiteSolver*(10**3))
 
         ##########################################################
@@ -183,19 +143,19 @@ class Modelo:
         fm.defineVariavelTurma_p(self)
 
         ##  Restricoes  ##
-        fm.restricoesEtapaContinuidade(self)
+        fm.addRestricoesEtapaContinuidade(self)
 
-        ##  Funcao Obj  ##
-        fm.objMinimizaTurmasParaContinuidade(self) #Minimizamos o total de turmas para juntar sala quando possivel
+        ##  Funcao Objetivo  ##
+        fm.objMinSomaTurmas(self)
 
-        ##### Resolve para alunos de continuidade  #####
+        ## Resolve para alunos de continuidade  ##
         self.status = self.modelo.Solve()
 
-        if self.status == pywraplp.Solver.INFEASIBLE: ##Verba insuficiente
-            raise ps.ErroVerbaInsufParaContinuidade()
+        if self.status == pywraplp.Solver.INFEASIBLE:
+            raise erros.ErroVerbaInsufParaContinuidade()
 
         #####  PREPARA PARA SEGUNDA ETAPA  #####
-        turmaAlunoCont, turmasCont, desempateEscola = fm.confirmaSolucaoParaAlunosContinuidade(self)
+        turmaAlunoCont, turmasCont, desempateEscola = fm.armazenaSolucaoEtapaContinuidade(self)
         self.modelo.Clear()
 
         ###############################################################
@@ -207,24 +167,13 @@ class Modelo:
         fm.defineVariavelTurma_p(self)
 
         ##  Restricoes  ##
-        fm.restricoesModeloPadrao(self) #Restricoes modelo padrao
-
-        ##  Restricoes adicionais:
-        # Aplica a solucao da primeira etapa via restricoes
-        for i, t in turmaAlunoCont:
-            self.modelo.Add(self.x[i][t] == 1)
-
-        # Mantem as turmas que nao possuem alunos de continuidade fechadas
-        for escola in self.listaTurmas.keys():
-            for serie in self.listaTurmas[escola].keys():
-                for t in self.listaTurmas[escola][serie]['turmas']:
-                    if not t in turmasCont:
-                        self.modelo.Add(self.p[t] == 0)
+        fm.addRestricoesModeloBase(self)
+        fm.addRestricoesAdicionaisEtapa2(self, turmaAlunoCont, turmasCont)
 
         ##  Funcao Objetivo  ##
-        fm.objSomaTodosAlunos(self)
+        fm.objMaxSomaTodosAlunos(self)
 
-        #####  Resolve completando as turmas de alunos de continuidade  #####
+        ##  Resolve completando as turmas de alunos de continuidade  ##
         self.status = self.modelo.Solve()
 
         ### PREPARA PARA TERCEIRA ETAPA  ###
@@ -241,54 +190,22 @@ class Modelo:
         fm.defineVariavelTurma_p(self)
 
         ##  Restricoes  ##
-        fm.restricoesModeloPadrao(self)
-
-        # Aplica as solucoes da primeira e da segunda etapa via restricoes
-        for i, t in turmaAlunoCont:
-            self.modelo.Add(self.x[i][t] == 1)
-
-        for k, t in turmaAlunoForm:
-            self.modelo.Add(self.y[k][t] == 1)
-
-        # Adiciona restricoes para priorizar turmas com maior demanda
-        keys = list(demandaOrdenada.keys())
-        for t1 in range(len(demandaOrdenada)-1):
-            t2 = t1 + 1
-            turma1 = keys[t1]
-            turma2 = keys[t2]
-            Y1 = []
-            Y2 = []
-
-            escola = turma1[0]
-            serie = turma1[1]
-            for t in self.listaTurmas[escola][serie]['turmas']:
-                if self.listaTurmas[escola][serie]['aprova'][t] == 0:
-                        Y1.append(self.p[t])
-
-            escola = turma2[0]
-            serie = turma2[1]
-            for t in self.listaTurmas[escola][serie]['turmas']:
-                if self.listaTurmas[escola][serie]['aprova'][t] == 0:
-                        Y2.append(self.p[t])
-
-            self.modelo.Add(sum(Y2) <= sum(Y1))
+        fm.addRestricoesModeloBase(self)
+        fm.addRestricoesAdicionaisPrioridadeParcialEtapaFinal(self, turmaAlunoCont, turmaAlunoForm, demandaOrdenada)
 
         #####  Funcao Objetivo  #####
-        fm.objSomaTodosAlunos(self)
+        fm.objMaxSomaTodosAlunos(self)
 
         #####  Resolve liberando novas turmas e priorizando demanda #####
         self.status = self.modelo.Solve()
 
-    def SolverConstrutivo(self):
-        if not self.dadosAdicionados:
-            raise ErroLeituraDados()
+    def Solve(self):
+        if not self.dadosParametrosConfigurados:
+            raise erros.ErroLeituraDadosParametros()
 
-        if not self.parametrosConfigurados:
-            raise ErroConfiguracaoParametros()
+        self.tempoExecPreSolver = ps.preSolver(self)
 
-        ps.preSolve(self)
-
-        self.modelo = pywraplp.Solver.CreateSolver('Matematica_em_Movimento', self.tipoSolver)
+        self.modelo = pywraplp.Solver.CreateSolver('MatMov_Solver', self.tipoSolver)
         self.modelo.SetTimeLimit(self.tempoLimiteSolver*(10**3))
 
         ##########################################################
@@ -299,19 +216,19 @@ class Modelo:
         fm.defineVariavelTurma_p(self)
 
         ##  Restricoes  ##
-        fm.restricoesEtapaContinuidade(self)
+        fm.addRestricoesEtapaContinuidade(self)
 
-        ##  Funcao Obj  ##
-        fm.objMinimizaTurmasParaContinuidade(self) #Minimizamos o total de turmas para juntar sala quando possivel
+        ##  Funcao Objetivo  ##
+        fm.objMinSomaTurmas(self)
 
-        ##### Resolve para alunos de continuidade  #####
+        ## Resolve para alunos de continuidade  ##
         self.status = self.modelo.Solve()
 
-        if self.status == pywraplp.Solver.INFEASIBLE: ##Verba insuficiente
-            raise ps.ErroVerbaInsufParaContinuidade()
+        if self.status == pywraplp.Solver.INFEASIBLE:
+            raise erros.ErroVerbaInsufParaContinuidade()
 
         #####  PREPARA PARA SEGUNDA ETAPA  #####
-        turmaAlunoCont, turmasCont, desempateEscola = fm.confirmaSolucaoParaAlunosContinuidade(self)
+        turmaAlunoCont, turmasCont, desempateEscola = fm.armazenaSolucaoEtapaContinuidade(self)
         self.modelo.Clear()
 
         ###############################################################
@@ -323,24 +240,13 @@ class Modelo:
         fm.defineVariavelTurma_p(self)
 
         ##  Restricoes  ##
-        fm.restricoesModeloPadrao(self) #Restricoes modelo padrao
-
-        ##  Restricoes adicionais:
-        # Aplica a solucao da primeira etapa via restricoes
-        for i, t in turmaAlunoCont:
-            self.modelo.Add(self.x[i][t] == 1)
-
-        # Mantem as turmas que nao possuem alunos de continuidade fechadas
-        for escola in self.listaTurmas.keys():
-            for serie in self.listaTurmas[escola].keys():
-                for t in self.listaTurmas[escola][serie]['turmas']:
-                    if not t in turmasCont:
-                        self.modelo.Add(self.p[t] == 0)
+        fm.addRestricoesModeloBase(self)
+        fm.addRestricoesAdicionaisEtapa2(self, turmaAlunoCont, turmasCont)
 
         ##  Funcao Objetivo  ##
-        fm.objSomaTodosAlunos(self)
+        fm.objMaxSomaTodosAlunos(self)
 
-        #####  Resolve completando as turmas de alunos de continuidade  #####
+        ##  Resolve completando as turmas de alunos de continuidade  ##
         self.status = self.modelo.Solve()
 
         ### PREPARA PARA TERCEIRA ETAPA  ###
@@ -359,7 +265,7 @@ class Modelo:
             fm.defineVariavelTurma_p(self)
 
             ##  Restricoes  ##
-            fm.restricoesModeloPadrao(self) #Restricoes modelo padrao
+            fm.addRestricoesModeloBase(self) #Restricoes modelo padrao
 
             # Aplica as solucoes da primeira e da segunda etapa via restricoes
             for i, t in turmaAlunoCont:
@@ -371,12 +277,12 @@ class Modelo:
             for t in turmasFechadas:
                 self.modelo.Add(self.p[t] == 0)
 
-            fm.objSomaTodosAlunos(self)
+            fm.objMaxSomaTodosAlunos(self)
 
             ## Resolve ##
             self.status = self.modelo.Solve()
 
-            turmaAlunoCont, turmasCont, desempateEscola = fm.confirmaSolucaoParaAlunosContinuidade(self)
+            turmaAlunoCont, turmasCont, desempateEscola = fm.armazenaSolucaoEtapaContinuidade(self)
             turmaAlunoForm, demandaOrdenada = fm.recalculaDemandaBaseadoNasTurmasContEOrdena(self, desempateEscola)
 
             turmasFechadas = fm.verificaTurmasFechadas(self, demandaOrdenada, desempateEscola)
@@ -484,7 +390,7 @@ class Modelo:
                                 c.execute('INSERT INTO sol_priorizacao_formulario VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', linha)
 
                         ###Adiciona turma
-                        nome = geraNomeTurma(regiao, serie, contadorTurmas, self.tabelaSerie, self.tabelaEscola, self.tabelaRegiao)
+                        nome = res.geraNomeTurma(regiao, serie, contadorTurmas, self.tabelaSerie, self.tabelaEscola, self.tabelaRegiao)
 
                         if len(self.tabelaTurma[(self.tabelaTurma['nome'] == nome)].index) > 0:
                             self.listaTurmas[escola][serie]['aprova'][t] = 1 #Aprova a turma se ela existia

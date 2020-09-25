@@ -2,11 +2,9 @@ import MatMovSolver as MM
 
 MatMov = MM.Modelo()
 
-MatMov.leituraDados()
+MatMov.leituraDadosParametros()
 
-MatMov.configuraParametros()
-
-MatMov.Solver2()
+MatMov.Solve()
 
 MatMov.estatisticaSolver()
 

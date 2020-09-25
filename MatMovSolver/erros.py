@@ -36,9 +36,9 @@ class ErroCPFRepetido(Exception):
         else:
             return 'O aluno de formulario com CPF {} possui {} inscricoes (deve possuir somente uma).'.format(self.cpf, self.qtdMatr)
 
-#####  Erros do modulo #####
+#####  Erros do modulo  #####
 class ErroLeituraDadosParametros(Exception):
-    """ Erro exibido se a leitura de dados e configuracao de parametros nao foi realizada. """
+    """ Erro exibido se a leitura de dados e configuracao de parametros nao foi realizada antes da execucao do solver. """
     def __str__(self):
         return 'A leitura de dados nao foi realizada. Execute Modelo().leituraDadosParametros() previamente.'
 

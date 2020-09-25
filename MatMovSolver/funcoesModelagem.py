@@ -1,94 +1,99 @@
-from numpy.random import uniform
 from math import ceil
 
-#####  VARIAVEIS  #####
-#Alunos de continuidade
+from numpy.random import uniform
+
+##################################
+#####  VARIAVEIS DE DECISAO  #####
+##################################
 def defineVariavelAlunoCont_x(self):
+    """ Adiciona as variaveis de decisao para alunos de continuidade. """
     for i, turmas in self.alunoCont.items():
         self.x[i] = {}
         for t in turmas:
             self.x[i][t] = self.modelo.IntVar(0, 1, 'x[{}][{}]'.format(i, t))
 
-#Alunos de formulario
 def defineVariavelAlunoForm_y(self):
+    """ Adiciona as variaveis de decisao para alunos de formulario. """
     for k, turmas in self.alunoForm.items():
         self.y[k] = {}
         for t in turmas:
             self.y[k][t] = self.modelo.IntVar(0, 1, 'y[{}][{}]'.format(k, t))
 
-#Turmas
 def defineVariavelTurma_p(self):
-    for escola in self.listaTurmas.keys():
-        for serie in self.listaTurmas[escola].keys():
-            turmas = self.listaTurmas[escola][serie]['turmas']
-            for t in turmas:
-                self.p[t] = self.modelo.IntVar(0, 1, 'p[{}]'.format(t))
-
-#####  RESTRICOES MODELO PADRAO  #####
-# (I.a): alunos de continuidade sao matriculados em exatamente uma turma
-def limiteQtdTurmasAlunoCont(self):
-    for i in self.alunoCont.keys():
-        turmas = [self.x[i][t] for t in self.alunoCont[i]]
-        self.modelo.Add(sum(turmas) == 1)
-
-# (I.b): alunos de formulario sao matriculados em no máximo uma turma
-def limiteQtdTurmasAlunoForm(self):
-    for k in self.alunoForm.keys():
-        turmas = [self.y[k][t] for t in self.alunoForm[k]]
-        self.modelo.Add(sum(turmas) <= 1)
-
-# (II): atender o limite de alunos por turma se a turma estiver aberta
-def limiteQtdAlunosPorTurma(self):
+    """ Adiciona as variaveis de decisao para as turmas liberadas. """
     for escola in self.listaTurmas.keys():
         for serie in self.listaTurmas[escola].keys():
             for t in self.listaTurmas[escola][serie]['turmas']:
-                alunosCont_t = [self.x[i][t] for i in self.listaTurmas[escola][serie]['alunosPossiveis']['cont']]
-                alunosForm_t = [self.y[k][t] for k in self.listaTurmas[escola][serie]['alunosPossiveis']['form']]
+                self.p[t] = self.modelo.IntVar(0, 1, 'p[{}]'.format(t))
 
-                self.modelo.Add(sum(alunosCont_t) + sum(alunosForm_t) <= self.maxAlunos*self.p[t])
+########################
+#####  RESTRICOES  #####
+########################
+#####  Restricoes modelo base  #####
+def limiteQtdTurmasAlunoCont(self):
+    """ (I.a): alunos de continuidade sao matriculados em exatamente uma turma. """
+    for i, turmas in self.alunoCont.items():
+        turmas = [self.x[i][t] for t in turmas]
+        self.modelo.Add(sum(turmas) == 1)
 
-# (III): abrir turmas em ordem crescente
+def limiteQtdTurmasAlunoForm(self):
+    """ (I.b): alunos de formulario sao matriculados em no maximo uma turma. """
+    for k, turmas in self.alunoForm.items():
+        turmas = [self.y[k][t] for t in turmas]
+        self.modelo.Add(sum(turmas) <= 1)
+
+def limiteQtdAlunosPorTurma(self):
+    """ (II): atender o limite de alunos por turma se a turma estiver aberta. """
+    for escola in self.listaTurmas.keys():
+        for serie in self.listaTurmas[escola].keys():
+            for t in self.listaTurmas[escola][serie]['turmas']:
+                alunosCont = [self.x[i][t] for i in self.listaTurmas[escola][serie]['alunosPossiveis']['cont']]
+                alunosForm = [self.y[k][t] for k in self.listaTurmas[escola][serie]['alunosPossiveis']['form']]
+
+                self.modelo.Add(sum(alunosCont) + sum(alunosForm) <= self.maxAlunos*self.p[t])
+
 def abreTurmaEmOrdemCrescente(self):
+    """ (III): abrir turmas em ordem crescente. """
     for escola in self.listaTurmas.keys():
         for serie in self.listaTurmas[escola].keys():
             turmas = self.listaTurmas[escola][serie]['turmas']
             for t in range(len(turmas)-1):
                 self.modelo.Add(self.p[turmas[t+1]] <= self.p[turmas[t]])
 
-# (IV): se nao tem aluno na turma, a turma deve ser fechada
 def fechaTurmaSeNaoTemAluno(self):
+    """ (IV): se nao tem alunos na turma, a turma deve ser fechada. """
     for escola in self.listaTurmas.keys():
         for serie in self.listaTurmas[escola].keys():
             for t in self.listaTurmas[escola][serie]['turmas']:
-                alunosCont_t = [self.x[i][t] for i in self.listaTurmas[escola][serie]['alunosPossiveis']['cont']]
-                alunosForm_t = [self.y[k][t] for k in self.listaTurmas[escola][serie]['alunosPossiveis']['form']]
+                alunosCont = [self.x[i][t] for i in self.listaTurmas[escola][serie]['alunosPossiveis']['cont']]
+                alunosForm = [self.y[k][t] for k in self.listaTurmas[escola][serie]['alunosPossiveis']['form']]
 
-                self.modelo.Add(self.p[t] <= sum(alunosCont_t) + sum(alunosForm_t))
+                self.modelo.Add(self.p[t] <= sum(alunosCont) + sum(alunosForm))
 
-# (V): o aluno de continuidade que nao reprovou deve continuar na mesma turma que os colegas
 def alunoContMesmaTurmaQueColegas(self):
+    """ (V): o aluno de continuidade que nao reprovou deve continuar na mesma turma que os colegas. """
     for i in self.alunoCont.keys():
         for j in self.alunoCont.keys():
-            if self.mesmaTurma[i][j] and not self.reprovou[i] and not self.reprovou[j]:
-                turmas = self.alunoCont[i] ## Como i e j estudaram na mesma turma e nenhum reprovou, entao alunoCont[i] == alunoCont[j]
+            if (self.mesmaTurma[i][j]) and (not self.reprovou[i]) and (not self.reprovou[j]):
+                turmas = self.alunoCont[i]
                 for t in turmas:
                     self.modelo.Add(self.x[i][t] == self.x[j][t])
 
-# (VI): priorizar alunos de formulario que se inscreveram antes
 def priorizaOrdemFormulario(self):
+    """ (VI): priorizar alunos de formulario que se inscreveram antes. """
     for escola in self.listaTurmas.keys():
         for serie in self.listaTurmas[escola].keys():
-            alunosForm_t = self.listaTurmas[escola][serie]['alunosPossiveis']['form']
-            for k in alunosForm_t:
-                for l in alunosForm_t:
-                    if self.ordemForm[k][l]: ##ordemForm[k][l] = True se k vem antes de l no formulario, False caso contrario
+            alunosForm = self.listaTurmas[escola][serie]['alunosPossiveis']['form']
+            for k in alunosForm:
+                for l in alunosForm:
+                    if self.ordemForm[k][l]:
                         yk = [self.y[k][t] for t in self.listaTurmas[escola][serie]['turmas']]
                         yl = [self.y[l][t] for t in self.listaTurmas[escola][serie]['turmas']]
 
                         self.modelo.Add(sum(yl) <= sum(yk))
 
-# (VII): atender limitacao de verba
 def limiteVerba(self):
+    """ (VII): atender limitacao de verba. """
     X = [self.x[i][t] for i in self.alunoCont.keys() for t in self.alunoCont[i]]
     Y = [self.y[k][t] for k in self.alunoForm.keys() for t in self.alunoForm[k]]
     P = []
@@ -99,7 +104,8 @@ def limiteVerba(self):
 
     self.modelo.Add(self.custoAluno*(sum(X) + sum(Y)) + self.custoProf*(self.qtdProfPedag + self.qtdProfAcd)*sum(P) <= self.verba)
 
-def restricoesModeloPadrao(self):
+def addRestricoesModeloBase(self):
+    """ Adiciona as restricoes do modelo linear base ao modelo em 'self'. """
     # (I.a): alunos de continuidade sao matriculados em exatamente uma turma
     limiteQtdTurmasAlunoCont(self)
 
@@ -124,27 +130,27 @@ def restricoesModeloPadrao(self):
     # (VII): atender limitacao de verba
     limiteVerba(self)
 
-#####  RESTRICOES MODIFICADAS PARA ETAPA DE CONTINUIDADE  #####
-# (II*): atender o limite de alunos por turma se a turma estiver aberta
+#####  Restricoes para alunos de continuidade - Etapa 1 #####
 def limiteQtdAlunosPorTurmaSomenteCont(self):
+    """ (II*): atender o limite de alunos por turma se a turma estiver aberta, considerando somente alunos de continuidade. """
     for escola in self.listaTurmas.keys():
         for serie in self.listaTurmas[escola].keys():
             for t in self.listaTurmas[escola][serie]['turmas']:
-                alunosCont_t = [self.x[i][t] for i in self.listaTurmas[escola][serie]['alunosPossiveis']['cont']]
+                alunosCont = [self.x[i][t] for i in self.listaTurmas[escola][serie]['alunosPossiveis']['cont']]
 
-                self.modelo.Add(sum(alunosCont_t) <= self.maxAlunos*self.p[t])
+                self.modelo.Add(sum(alunosCont) <= self.maxAlunos*self.p[t])
 
-# (IV*): se nao tem aluno na turma, a turma deve ser fechada
 def fechaTurmaSeNaoTemAlunoSomenteCont(self):
+    """ (IV*): se nao tem alunos de continuidade na turma, a turma deve ser fechada. """
     for escola in self.listaTurmas.keys():
         for serie in self.listaTurmas[escola].keys():
             for t in self.listaTurmas[escola][serie]['turmas']:
-                alunosCont_t = [self.x[i][t] for i in self.listaTurmas[escola][serie]['alunosPossiveis']['cont']]
+                alunosCont = [self.x[i][t] for i in self.listaTurmas[escola][serie]['alunosPossiveis']['cont']]
 
-                self.modelo.Add(self.p[t] <= sum(alunosCont_t))
+                self.modelo.Add(self.p[t] <= sum(alunosCont))
 
-# (VII*): atender limitacao de verba
 def limiteVerbaSomenteCont(self):
+    """ (VII*): atender limitacao de verba. """
     X = [self.x[i][t] for i in self.alunoCont.keys() for t in self.alunoCont[i]]
     P = []
     for escola in self.listaTurmas.keys():
@@ -154,7 +160,8 @@ def limiteVerbaSomenteCont(self):
 
     self.modelo.Add(self.custoAluno*sum(X) + self.custoProf*(self.qtdProfPedag + self.qtdProfAcd)*sum(P) <= self.verba)
 
-def restricoesEtapaContinuidade(self):
+def addRestricoesEtapaContinuidade(self):
+    """ Adiciona as restricoes do problema envolvendo somente alunos de continuidade (Etapa 1) ao modelo em 'self'."""
     # (I.a): alunos de continuidade sao matriculados em exatamente uma turma
     limiteQtdTurmasAlunoCont(self)
 
@@ -173,7 +180,84 @@ def restricoesEtapaContinuidade(self):
     # (VII*): atender limitacao de verba
     limiteVerbaSomenteCont(self)
 
-def confirmaSolucaoParaAlunosContinuidade(self):
+#####  Restricoes adicionais para etapas 2 e 3  #####
+def addRestricoesAdicionaisEtapa2(self, turmaAlunoCont, turmasCont):
+    # Aplica a solucao da primeira etapa via restricoes
+    for i, t in turmaAlunoCont:
+        self.modelo.Add(self.x[i][t] == 1)
+
+    # Mantem as turmas que nao possuem alunos de continuidade fechadas
+    for escola in self.listaTurmas.keys():
+        for serie in self.listaTurmas[escola].keys():
+            for t in self.listaTurmas[escola][serie]['turmas']:
+                if not t in turmasCont:
+                    self.modelo.Add(self.p[t] == 0)
+
+def addRestricoesAdicionaisEtapa3():
+    return True
+
+def addRestricoesAdicionaisPrioridadeParcialEtapaFinal(self, turmaAlunoCont, turmaAlunoForm, demandaOrdenada):
+    # Aplica as solucoes da primeira e da segunda etapa via restricoes
+    for i, t in turmaAlunoCont:
+        self.modelo.Add(self.x[i][t] == 1)
+
+    for k, t in turmaAlunoForm:
+        self.modelo.Add(self.y[k][t] == 1)
+
+    # Adiciona restricoes para priorizar turmas com maior demanda
+    keys = list(demandaOrdenada.keys())
+    for t1 in range(len(demandaOrdenada)-1):
+        t2 = t1 + 1
+        turma1 = keys[t1]
+        turma2 = keys[t2]
+        Y1 = []
+        Y2 = []
+
+        escola = turma1[0]
+        serie = turma1[1]
+        for t in self.listaTurmas[escola][serie]['turmas']:
+            if self.listaTurmas[escola][serie]['aprova'][t] == 0:
+                Y1.append(self.p[t])
+
+        escola = turma2[0]
+        serie = turma2[1]
+        for t in self.listaTurmas[escola][serie]['turmas']:
+            if self.listaTurmas[escola][serie]['aprova'][t] == 0:
+                Y2.append(self.p[t])
+
+        self.modelo.Add(sum(Y2) <= sum(Y1))
+##############################
+#####  FUNCOES OBJETIVO  #####
+##############################
+def objMinSomaTurmas(self):
+    """ Objetivo Etapa 1: minimizar a soma das turmas para forcar a uniao de turmas quando possivel. """
+    P = []
+    for escola in self.listaTurmas.keys():
+        for serie in self.listaTurmas[escola].keys():
+            for t in self.listaTurmas[escola][serie]['turmas']:
+                P.append(self.p[t])
+
+    self.modelo.Minimize(sum(P))
+
+def objMaxSomaTodosAlunos(self):
+    """ Define como objetivo a maximizacao do total de alunos matriculados (entre alunos de continuidade e formulario)."""
+    X = [self.x[i][t] for i in self.alunoCont.keys() for t in self.alunoCont[i]]
+    Y = [self.y[k][t] for k in self.alunoForm.keys() for t in self.alunoForm[k]]
+
+    self.modelo.Maximize(sum(X) + sum(Y))
+
+def objMaxSomaAlunosForm(self):
+    """
+    Define como objetivo a maximizacao de alunos de formulario matriculados. Como a turma de destino de cada alunos de
+    continuidade esta determinada a partir da primeira etapa, podemos considerar somente a maximizacao de alunos de formulario
+    nas etapas 2 e 3.
+    """
+    Y = [self.y[k][t] for k in self.alunoForm.keys() for t in self.alunoForm[k]]
+
+    self.modelo.Maximize(sum(Y))
+
+#####################################################################################
+def armazenaSolucaoEtapaContinuidade(self):
     alunoTurmaCont = []
     turmasCont = []
     desempateEscola = {}
@@ -183,7 +267,6 @@ def confirmaSolucaoParaAlunosContinuidade(self):
             for t in self.listaTurmas[escola][serie]['turmas']:
                 if self.p[t].solution_value() == 1:
                     desempateEscola[escola]['totalTurmas'] += 1
-                    self.listaTurmas[escola][serie]['aprova'][t] = 1 # Aprova a turma pois possui alunos de continuidade
                     turmasCont.append(t)
                     for i in self.listaTurmas[escola][serie]['alunosPossiveis']['cont']:
                         if self.x[i][t].solution_value() == 1:
@@ -318,20 +401,4 @@ def verificaTurmasFechadas(self, demandaOrdenada, desempateEscola):
                     turmasFechadas.append(t)
 
     return turmasFechadas
-
-#####  FUNCOES OBJETIVO  #####
-def objMinimizaTurmasParaContinuidade(self):
-    P = []
-    for escola in self.listaTurmas.keys():
-        for serie in self.listaTurmas[escola].keys():
-            for t in self.listaTurmas[escola][serie]['turmas']:
-                P.append(self.p[t])
-
-    self.modelo.Minimize(sum(P))
-
-
-def objSomaTodosAlunos(self):
-    X = [self.x[i][t] for i in self.alunoCont.keys() for t in self.alunoCont[i]]
-    Y = [self.y[k][t] for k in self.alunoForm.keys() for t in self.alunoForm[k]]
-
-    self.modelo.Maximize(sum(X) + sum(Y))
+####################################################################################
