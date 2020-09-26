@@ -1,3 +1,6 @@
+# Python cache files #
+*.pyc
+
 # databases #
 *.db
 
