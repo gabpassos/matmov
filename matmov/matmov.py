@@ -1,4 +1,5 @@
 import sqlite3
+import time
 
 import pandas as pd
 from ortools.linear_solver import pywraplp
@@ -24,6 +25,7 @@ class modelo:
         self.tabelaAlunoForm = None
 
         self.ordemUltimaSerie = None
+        self.custoBase = None
 
         #Parametros do problema
         self.anoPlanejamento = None
@@ -60,7 +62,8 @@ class modelo:
         self.ordemForm = {}
 
         #Estatiscas do metodo
-        self.tempoExecPreSolver = 0
+        self.tempoExecPreSolver = None
+        self.tempoExecTotal = None
 
     def leituraDadosParametros(self):
         '''
@@ -95,6 +98,8 @@ class modelo:
 
         ultimaSerie_id = self.tabelaSerie[(self.tabelaSerie['ativa'] == 1)]['ordem'].idxmax()
         self.ordemUltimaSerie = self.tabelaSerie['ordem'][ultimaSerie_id]
+
+        self.custoBase = self.custoAluno + self.custoProf*(self.qtdProfPedag + self.qtdProfAcd)
 
         erros.verificaCpfRepetido(self.tabelaAlunoCont, self.tabelaAlunoForm)
 
@@ -155,7 +160,7 @@ class modelo:
             raise erros.ErroVerbaInsufParaContinuidade()
 
         #####  PREPARA PARA SEGUNDA ETAPA  #####
-        turmaAlunoCont, turmasCont, desempateEscola = fm.armazenaSolucaoEtapaContinuidade(self)
+        alunoTurmaCont, turmasFechadas, desempateEscola = fm.armazenaSolContInicTurmasFechadas(self)
         self.modelo.Clear()
 
         ###############################################################
@@ -168,7 +173,7 @@ class modelo:
 
         ##  Restricoes  ##
         fm.addRestricoesModeloBase(self)
-        fm.addRestricoesAdicionaisEtapa2(self, turmaAlunoCont, turmasCont)
+        fm.addRestricoesAdicionaisEtapa2(self, alunoTurmaCont, turmasFechadas)
 
         ##  Funcao Objetivo  ##
         fm.objMaxSomaTodosAlunos(self)
@@ -177,8 +182,8 @@ class modelo:
         self.status = self.modelo.Solve()
 
         ### PREPARA PARA TERCEIRA ETAPA  ###
-        turmaAlunoForm, demandaOrdenada = fm.recalculaDemandaBaseadoNasTurmasContEOrdena(self, desempateEscola)
-        demandaOrdenada = fm.ordenaTurmasDeFormulario(self, demandaOrdenada, desempateEscola)
+        demandaOrdenada, alunoTurmaForm = fm.iniciaDemandaOrdenadaAlunoTurmaForm(self, desempateEscola)
+        demandaOrdenada = fm.ordenaTurmasDeFormularioPrioridadeParcial(self, demandaOrdenada, desempateEscola)
         self.modelo.Clear()
 
         ################################################################################################
@@ -191,7 +196,7 @@ class modelo:
 
         ##  Restricoes  ##
         fm.addRestricoesModeloBase(self)
-        fm.addRestricoesAdicionaisPrioridadeParcialEtapaFinal(self, turmaAlunoCont, turmaAlunoForm, demandaOrdenada)
+        fm.addRestricoesAdicionaisPrioridadeParcialEtapa3(self, alunoTurmaCont, alunoTurmaForm, demandaOrdenada)
 
         #####  Funcao Objetivo  #####
         fm.objMaxSomaTodosAlunos(self)
@@ -203,6 +208,7 @@ class modelo:
         if not self.dadosParametrosConfigurados:
             raise erros.ErroLeituraDadosParametros()
 
+        t_i = time.time()
         self.tempoExecPreSolver = ps.preSolver(self)
 
         self.modelo = pywraplp.Solver.CreateSolver('MatMov_Solver', self.tipoSolver)
@@ -228,7 +234,7 @@ class modelo:
             raise erros.ErroVerbaInsufParaContinuidade()
 
         #####  PREPARA PARA SEGUNDA ETAPA  #####
-        turmaAlunoCont, turmasCont, desempateEscola = fm.armazenaSolucaoEtapaContinuidade(self)
+        alunoTurmaCont, turmasAbertas, turmasFechadas, desempateEscola = fm.armazenaSolContInicTurmasAbertasFechadas(self)
         self.modelo.Clear()
 
         ###############################################################
@@ -241,7 +247,7 @@ class modelo:
 
         ##  Restricoes  ##
         fm.addRestricoesModeloBase(self)
-        fm.addRestricoesAdicionaisEtapa2(self, turmaAlunoCont, turmasCont)
+        fm.addRestricoesAdicionaisEtapa2(self, alunoTurmaCont, turmasFechadas)
 
         ##  Funcao Objetivo  ##
         fm.objMaxSomaTodosAlunos(self)
@@ -250,13 +256,13 @@ class modelo:
         self.status = self.modelo.Solve()
 
         ### PREPARA PARA TERCEIRA ETAPA  ###
-        turmaAlunoForm, demandaOrdenada = fm.recalculaDemandaBaseadoNasTurmasContEOrdena(self, desempateEscola)
-        turmasFechadas = fm.verificaTurmasFechadas(self, demandaOrdenada, desempateEscola)
+        demandaOrdenada, alunoTurmaForm = fm.iniciaDemandaOrdenadaAlunoTurmaForm(self, desempateEscola)
+        turmasPermitidas = fm.avaliaTurmasPermitidas(self, turmasFechadas, demandaOrdenada, desempateEscola)
 
         ################################################################################################
         #####  TERCEIRA ETAPA (abre turmas novas priorizando a demanda com criterio de desempate)  #####
         ################################################################################################
-        while not turmasFechadas is None:
+        while not turmasPermitidas is None:
             self.modelo.Clear()
 
             ##  Variaveis  ##
@@ -266,26 +272,22 @@ class modelo:
 
             ##  Restricoes  ##
             fm.addRestricoesModeloBase(self) #Restricoes modelo padrao
+            fm.addRestricoesAdicionaisEtapa3(self, alunoTurmaCont, alunoTurmaForm, turmasFechadas)
 
-            # Aplica as solucoes da primeira e da segunda etapa via restricoes
-            for i, t in turmaAlunoCont:
-                self.modelo.Add(self.x[i][t] == 1)
-
-            for k, t in turmaAlunoForm:
-                self.modelo.Add(self.y[k][t] == 1)
-
-            for t in turmasFechadas:
-                self.modelo.Add(self.p[t] == 0)
-
+            ##  Funcao Objetivo  ##
             fm.objMaxSomaTodosAlunos(self)
 
             ## Resolve ##
             self.status = self.modelo.Solve()
 
-            turmaAlunoCont, turmasCont, desempateEscola = fm.armazenaSolucaoEtapaContinuidade(self)
-            turmaAlunoForm, demandaOrdenada = fm.recalculaDemandaBaseadoNasTurmasContEOrdena(self, desempateEscola)
+            demandaOrdenada = fm.atualizaDadosTurmas(self, alunoTurmaForm, turmasAbertas, turmasPermitidas,
+                                                     turmasFechadas, demandaOrdenada, desempateEscola)
 
-            turmasFechadas = fm.verificaTurmasFechadas(self, demandaOrdenada, desempateEscola)
+            turmasPermitidas = fm.avaliaTurmasPermitidas(self, turmasFechadas,
+                                                         demandaOrdenada, desempateEscola)
+
+        t_f = time.time()
+        self.tempoExecTotal = t_f - t_i
 
     def estatisticaProblema(self):
         print('\nESTATISTICAS PROBLEMA')
@@ -329,6 +331,8 @@ class modelo:
         print('Numero de restricoes: ', self.modelo.NumConstraints())
 
         ##Tempo de execucao
+        print('Tempo de execucao total (s): ', self.tempoExecTotal)
+        print('Tempo de execucao presolver (s): ', self.tempoExecPreSolver)
         print('Tempo de execucao total do solver (ms): ', self.modelo.WallTime())
         print('Tempo de execucao total do solver (s): ', self.modelo.WallTime()*(10**(-3)))
 

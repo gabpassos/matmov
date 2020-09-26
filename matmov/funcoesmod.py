@@ -181,22 +181,31 @@ def addRestricoesEtapaContinuidade(self):
     limiteVerbaSomenteCont(self)
 
 #####  Restricoes adicionais para etapas 2 e 3  #####
-def addRestricoesAdicionaisEtapa2(self, turmaAlunoCont, turmasCont):
-    # Aplica a solucao da primeira etapa via restricoes
+def addRestricoesAdicionaisEtapa2(self, turmaAlunoCont, turmasFechadas):
+    """
+    Adiciona as restricoes adicionais da etapa 2:
+    - (E2a): Fixa os alunos de continuidade nas turmas determinadas pela Etapa 1.
+    - (E2b): Mantem as turmas que nao possuem alunos de continuidade fechada. Isso forca o modelo a completar as turmas existentes.
+    """
+    # (E2a): Fixa os alunos de continuidade nas turmas determinadas pela Etapa 1
     for i, t in turmaAlunoCont:
         self.modelo.Add(self.x[i][t] == 1)
 
-    # Mantem as turmas que nao possuem alunos de continuidade fechadas
-    for escola in self.listaTurmas.keys():
-        for serie in self.listaTurmas[escola].keys():
-            for t in self.listaTurmas[escola][serie]['turmas']:
-                if not t in turmasCont:
-                    self.modelo.Add(self.p[t] == 0)
+    # (E2b): Mantem as turmas que nao possuem alunos de continuidade fechada.
+    for t in turmasFechadas:
+        self.modelo.Add(self.p[t] == 0)
 
-def addRestricoesAdicionaisEtapa3():
-    return True
+def addRestricoesAdicionaisEtapa3(self, alunoTurmaCont, alunoTurmaForm, turmasFechadas):
+    for i, t in alunoTurmaCont:
+        self.modelo.Add(self.x[i][t] == 1)
 
-def addRestricoesAdicionaisPrioridadeParcialEtapaFinal(self, turmaAlunoCont, turmaAlunoForm, demandaOrdenada):
+    for k, t in alunoTurmaForm:
+        self.modelo.Add(self.y[k][t] == 1)
+
+    for t in turmasFechadas:
+        self.modelo.Add(self.p[t] == 0)
+
+def addRestricoesAdicionaisPrioridadeParcialEtapa3(self, turmaAlunoCont, turmaAlunoForm, demandaOrdenada):
     # Aplica as solucoes da primeira e da segunda etapa via restricoes
     for i, t in turmaAlunoCont:
         self.modelo.Add(self.x[i][t] == 1)
@@ -226,6 +235,7 @@ def addRestricoesAdicionaisPrioridadeParcialEtapaFinal(self, turmaAlunoCont, tur
                 Y2.append(self.p[t])
 
         self.modelo.Add(sum(Y2) <= sum(Y1))
+
 ##############################
 #####  FUNCOES OBJETIVO  #####
 ##############################
@@ -256,44 +266,19 @@ def objMaxSomaAlunosForm(self):
 
     self.modelo.Maximize(sum(Y))
 
-#####################################################################################
-def armazenaSolucaoEtapaContinuidade(self):
-    alunoTurmaCont = []
-    turmasCont = []
-    desempateEscola = {}
-    for escola in self.listaTurmas.keys():
-        desempateEscola[escola] = {'alunosMatriculados': 0, 'totalTurmas': 0}
-        for serie in self.listaTurmas[escola].keys():
-            for t in self.listaTurmas[escola][serie]['turmas']:
-                if self.p[t].solution_value() == 1:
-                    desempateEscola[escola]['totalTurmas'] += 1
-                    turmasCont.append(t)
-                    for i in self.listaTurmas[escola][serie]['alunosPossiveis']['cont']:
-                        if self.x[i][t].solution_value() == 1:
-                            alunoTurmaCont.append((i,t))
-                            desempateEscola[escola]['alunosMatriculados'] += 1
-
-    return alunoTurmaCont, turmasCont, desempateEscola
-
-def recalculaDemandaBaseadoNasTurmasContEOrdena(self, desempateEscola):
-    demanda = {}
-    turmaAlunoForm = []
+################################
+#####  FUNCOES AUXILIARES  #####
+################################
+def verbaDisponivel(self):
+    X = [self.x[i][t].solution_value() for i in self.alunoCont.keys() for t in self.alunoCont[i]]
+    Y = [self.y[k][t].solution_value() for k in self.alunoForm.keys() for t in self.alunoForm[k]]
+    P = []
     for escola in self.listaTurmas.keys():
         for serie in self.listaTurmas[escola].keys():
-            demanda[(escola,serie)] = self.listaTurmas[escola][serie]['demanda']
             for t in self.listaTurmas[escola][serie]['turmas']:
-                if self.p[t].solution_value() == 1:
-                    for k in self.listaTurmas[escola][serie]['alunosPossiveis']['form']:
-                        if self.y[k][t].solution_value() == 1:
-                            turmaAlunoForm.append((k,t))
-                            demanda[(escola,serie)] -= 1
-                            desempateEscola[escola]['alunosMatriculados'] += 1
+                P.append(self.p[t].solution_value())
 
-    demanda = {k: v for k, v in demanda.items() if v != 0} ##Remove as demandas nulas para nao afetar criterio de desempate
-
-    demandaOrdenada = {k: v for k, v in sorted(demanda.items(), key=lambda item: item[1], reverse= True)}
-
-    return turmaAlunoForm, demandaOrdenada
+    return self.verba - (self.custoAluno*(sum(X) + sum(Y)) + self.custoProf*(self.qtdProfPedag + self.qtdProfAcd)*sum(P))
 
 def pPrioriza_q(p, q, demandaOrdenada, desempateEscola, self):
     #Demanda de p sera sempre maior ou igual a demanda de q (nas condicoes dos metodos implementados aqui)
@@ -324,7 +309,143 @@ def pPrioriza_q(p, q, demandaOrdenada, desempateEscola, self):
 
     return True
 
-def ordenaTurmasDeFormulario(self, demandaOrdenada, desempateEscola):
+def ordenaDemanda(demanda):
+    demanda = {k: v for k, v in demanda.items() if v != 0}
+    demandaOrdenada = {k: v for k, v in sorted(demanda.items(), key=lambda item: item[1], reverse= True)}
+
+    return demandaOrdenada
+
+def armazenaSolContInicTurmasAbertasFechadas(self):
+    """
+    Verifica em quais turmas cada aluno de continuidade foi alocado e armazena essa informacao para
+    uso nas Etapas 2 e 3. Tambem contabiliza o total de alunos de continuidade matriculados em uma
+    escola e o total de turmas abertas na escola. Esses dados serao utilizados para criterio de
+    desempate ao abrir turmas novas.
+    """
+    alunoTurmaCont = []
+    turmasAbertas = []
+    turmasFechadas = []
+    desempateEscola = {}
+    for escola in self.listaTurmas.keys():
+        desempateEscola[escola] = {'alunosMatriculados': 0, 'totalTurmas': 0}
+        for serie in self.listaTurmas[escola].keys():
+            for t in self.listaTurmas[escola][serie]['turmas']:
+                if self.p[t].solution_value() == 1:
+                    desempateEscola[escola]['totalTurmas'] += 1
+                    turmasAbertas.append(t)
+                    for i in self.listaTurmas[escola][serie]['alunosPossiveis']['cont']:
+                        if self.x[i][t].solution_value() == 1:
+                            alunoTurmaCont.append((i,t))
+                            desempateEscola[escola]['alunosMatriculados'] += 1
+                else:
+                    turmasFechadas.append(t)
+
+    return alunoTurmaCont, turmasAbertas, turmasFechadas, desempateEscola
+
+def iniciaDemandaOrdenadaAlunoTurmaForm(self, desempateEscola):
+    demanda = {}
+    alunoTurmaForm = []
+    for escola in self.listaTurmas.keys():
+        for serie in self.listaTurmas[escola].keys():
+            demanda[(escola,serie)] = self.listaTurmas[escola][serie]['demanda']
+            for t in self.listaTurmas[escola][serie]['turmas']:
+                if self.p[t].solution_value() == 1:
+                    for k in self.listaTurmas[escola][serie]['alunosPossiveis']['form']:
+                        if self.y[k][t].solution_value() == 1:
+                            alunoTurmaForm.append((k, t))
+                            demanda[(escola,serie)] -= 1
+                            desempateEscola[escola]['alunosMatriculados'] += 1
+
+    demandaOrdenada = ordenaDemanda(demanda)
+    return demandaOrdenada, alunoTurmaForm
+
+def atualizaDadosTurmas(self, alunoTurmaForm, turmasAbertas, turmasPermitidas, turmasFechadas, demanda, desempateEscola):
+    escola = turmasPermitidas[0][0]
+    serie = turmasPermitidas[0][1]
+
+    for t in turmasPermitidas:
+        if self.p[t].solution_value() == 1:
+            turmasAbertas.append(t)
+            desempateEscola[escola]['totalTurmas'] += 1
+            for k in self.listaTurmas[escola][serie]['alunosPossiveis']['form']:
+                if self.y[k][t].solution_value() == 1:
+                    demanda[(escola, serie)] -= 1
+                    desempateEscola[escola]['alunosMatriculados'] += 1
+                    alunoTurmaForm.append((k, t))
+        else:
+            turmasFechadas.append(t)
+
+    return ordenaDemanda(demanda)
+
+def avaliaTurmasPermitidas(self, turmasFechadas, demandaOrdenada, desempateEscola):
+    if verbaDisponivel(self) < self.custoBase:
+        return None
+    elif len(demandaOrdenada) == 0:
+        return None
+
+    turmasPermitidas = []
+    key = list(demandaOrdenada.keys())
+    if len(key) == 1:
+        p = key[0]
+        escola = p[0]
+        serie = p[1]
+        for t in self.listaTurmas[escola][serie]['turmas']:
+            if self.p[t].solution_value() == 0:
+                turmasPermitidas.append(t)
+                break
+    else:
+        p = key[0]
+        q = key[1]
+        if pPrioriza_q(p, q, demandaOrdenada, desempateEscola, self):
+            qtdNovasTurmas = ceil((demandaOrdenada[p] - demandaOrdenada[q])/self.maxAlunos)
+            escola = p[0]
+            serie = p[1]
+        else:
+            qtdNovasTurmas = 1
+            escola = q[0]
+            serie = q[1]
+
+        contTurmas = 0
+        for t in self.listaTurmas[escola][serie]['turmas']:
+            if contTurmas < qtdNovasTurmas and self.p[t].solution_value() == 0:
+                if contTurmas < qtdNovasTurmas:
+                    turmasPermitidas.append(t)
+                    contTurmas += 1
+                else:
+                    break
+
+    for t in turmasPermitidas:
+        turmasFechadas.remove(t)
+
+    return turmasPermitidas
+
+#####################################################################################
+def armazenaSolContInicTurmasFechadas(self):
+    """
+    Verifica em quais turmas cada aluno de continuidade foi alocado e armazena essa informacao para
+    uso nas Etapas 2 e 3. Tambem contabiliza o total de alunos de continuidade matriculados em uma
+    escola e o total de turmas abertas na escola. Esses dados serao utilizados para criterio de
+    desempate ao abrir turmas novas.
+    """
+    alunoTurmaCont = []
+    turmasFechadas = []
+    desempateEscola = {}
+    for escola in self.listaTurmas.keys():
+        desempateEscola[escola] = {'alunosMatriculados': 0, 'totalTurmas': 0}
+        for serie in self.listaTurmas[escola].keys():
+            for t in self.listaTurmas[escola][serie]['turmas']:
+                if self.p[t].solution_value() == 1:
+                    desempateEscola[escola]['totalTurmas'] += 1
+                    for i in self.listaTurmas[escola][serie]['alunosPossiveis']['cont']:
+                        if self.x[i][t].solution_value() == 1:
+                            alunoTurmaCont.append((i,t))
+                            desempateEscola[escola]['alunosMatriculados'] += 1
+                else:
+                    turmasFechadas.append(t)
+
+    return alunoTurmaCont, turmasFechadas, desempateEscola
+
+def ordenaTurmasDeFormularioPrioridadeParcial(self, demandaOrdenada, desempateEscola):
     key_order = list(demandaOrdenada.keys())
     for c in range(len(demandaOrdenada) - 1):
         d = c + 1
@@ -337,68 +458,3 @@ def ordenaTurmasDeFormulario(self, demandaOrdenada, desempateEscola):
             demandaOrdenada = {k: demandaOrdenada[k] for k in key_order}
 
     return demandaOrdenada
-
-def verbaDisponivel(self):
-    X = [self.x[i][t].solution_value() for i in self.alunoCont.keys() for t in self.alunoCont[i]]
-    Y = [self.y[k][t].solution_value() for k in self.alunoForm.keys() for t in self.alunoForm[k]]
-    P = []
-    for escola in self.listaTurmas.keys():
-        for serie in self.listaTurmas[escola].keys():
-            for t in self.listaTurmas[escola][serie]['turmas']:
-                P.append(self.p[t].solution_value())
-
-    return self.verba - (self.custoAluno*(sum(X) + sum(Y)) + self.custoProf*(self.qtdProfPedag + self.qtdProfAcd)*sum(P))
-
-def verificaTurmasFechadas(self, demandaOrdenada, desempateEscola):
-    if verbaDisponivel(self) < self.custoAluno + self.custoProf*(self.qtdProfPedag + self.qtdProfAcd): #Nao consegue abrir nenhuma turma
-        return None
-    elif len(demandaOrdenada) == 0: ##Todo o formulario foi atendido
-        return None
-
-    turmasAbertas = []
-    for escola in self.listaTurmas.keys():
-        for serie in self.listaTurmas[escola].keys():
-            for t in self.listaTurmas[escola][serie]['turmas']:
-                if self.p[t].solution_value() == 1:
-                    turmasAbertas.append(t)
-
-    key = list(demandaOrdenada.keys())
-    if len(key) == 1:
-        p = key[0]
-        escola = p[0]
-        serie = p[1]
-        for t in self.listaTurmas[escola][serie]['turmas']:
-            if self.p[t].solution_value() == 0:
-                turmasAbertas.append(t)
-                break
-    else:
-        p = key[0]
-        q = key[1]
-        if pPrioriza_q(p, q, demandaOrdenada, desempateEscola, self): #Se a turma q tem prioridade sobre a turma q + 1
-            ##Permite abertura de turmas suficientes para alterar a ordem de prioridade
-            qtdNovasTurmas = ceil((demandaOrdenada[p] - demandaOrdenada[q])/self.maxAlunos)
-            escola = p[0]
-            serie = p[1]
-
-            contTurmas = 0
-            for t in self.listaTurmas[escola][serie]['turmas']:
-                if contTurmas < qtdNovasTurmas and self.p[t].solution_value() == 0:
-                    turmasAbertas.append(t)
-                    contTurmas += 1
-        else:
-            escola = q[0]
-            serie = q[1]
-            for t in self.listaTurmas[escola][serie]['turmas']:
-                if self.p[t].solution_value() == 0:
-                    turmasAbertas.append(t)
-                    break
-
-    turmasFechadas = []
-    for escola in self.listaTurmas.keys():
-        for serie in self.listaTurmas[escola].keys():
-            for t in self.listaTurmas[escola][serie]['turmas']:
-                if not t in turmasAbertas:
-                    turmasFechadas.append(t)
-
-    return turmasFechadas
-####################################################################################

@@ -322,12 +322,12 @@ def preSolver(modelo):
 
     Retorna o tempo de execucao total do pre-solver.
     """
-    start = time.time()
+    t_i = time.time()
     verificaDemandaTurmas(modelo, modelo.tabelaTurma, modelo.tabelaAlunoCont, modelo.tabelaAlunoForm, modelo.tabelaSerie)
 
     preparaDadosAlunosContinuidade(modelo, modelo.tabelaTurma, modelo.tabelaSerie, modelo.tabelaAlunoCont)
 
     preparaDadosAlunosFormulario(modelo, modelo.tabelaSerie, modelo.tabelaAlunoForm, modelo.listaTurmas)
-    stop = time.time()
+    t_f = time.time()
 
-    return start - stop
+    return t_f - t_i
