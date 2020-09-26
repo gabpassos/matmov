@@ -1,6 +1,6 @@
-import MatMovSolver as MM
+import matmov as mm
 
-MatMov = MM.Modelo()
+MatMov = mm.modelo()
 
 MatMov.leituraDadosParametros()
 
