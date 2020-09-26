@@ -3,7 +3,7 @@ from setuptools import setup
 with open("README.md", "r") as fh:
     long_description = fh.read()
 
-setup(name= 'MatMovSolver',
+setup(name= 'matmov',
       version= '1.0.0',
       description= 'Solver para o problema de alocação de alunos na ONG Matemática em Movimento',
       long_description= long_description,
@@ -11,7 +11,7 @@ setup(name= 'MatMovSolver',
       author= 'Gabriel Passos, Flávia C. Gachet',
       author_email= 'gabrielpassos97@hotmail.com',
       url= 'https://github.com/gabpassos/matmov',
-      packages= ['MatMovSolver'],
+      packages= ['matmov'],
       license= 'MIT',
 
       classifiers= [
