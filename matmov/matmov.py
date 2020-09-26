@@ -3,12 +3,12 @@ import sqlite3
 import pandas as pd
 from ortools.linear_solver import pywraplp
 
-from MatMovSolver import erros
-from MatMovSolver import preSolver as ps
-from MatMovSolver import funcoesModelagem as fm
-from MatMovSolver import resultados as res
+from matmov import erros
+from matmov import presolver as ps
+from matmov import funcoesmod as fm
+from matmov import resultados as res
 
-class Modelo:
+class modelo:
     """Classe modelo para o problema da ONG Matematica em Movimento."""
 
     def __init__(self, databasePath= 'data/database.db', tipoSolver= 'CBC', tempoLimSolverSegundos= 3600):
