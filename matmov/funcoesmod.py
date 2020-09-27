@@ -183,19 +183,25 @@ def addRestricoesEtapaContinuidade(self):
 #####  Restricoes adicionais para etapas 2 e 3  #####
 def addRestricoesAdicionaisEtapa2(self, turmaAlunoCont, turmasFechadas):
     """
-    Adiciona as restricoes adicionais da etapa 2:
-    - (E2a): Fixa os alunos de continuidade nas turmas determinadas pela Etapa 1.
-    - (E2b): Mantem as turmas que nao possuem alunos de continuidade fechada. Isso forca o modelo a completar as turmas existentes.
+    Completa o modelo com as restricoes adicionais da etapa 2:
+    - (E2.a): fixa os alunos de continuidade nas turmas determinadas pela Etapa 1.
+    - (E2.b): mantem as turmas que nao possuem alunos de continuidade fechada. Isso forca o modelo a completar as turmas existentes.
     """
-    # (E2a): Fixa os alunos de continuidade nas turmas determinadas pela Etapa 1
+    # (E2.a): Fixa os alunos de continuidade nas turmas determinadas pela Etapa 1
     for i, t in turmaAlunoCont:
         self.modelo.Add(self.x[i][t] == 1)
 
-    # (E2b): Mantem as turmas que nao possuem alunos de continuidade fechada.
+    # (E2.b): Mantem as turmas que nao possuem alunos de continuidade fechada.
     for t in turmasFechadas:
         self.modelo.Add(self.p[t] == 0)
 
 def addRestricoesAdicionaisEtapa3(self, alunoTurmaCont, alunoTurmaForm, turmasFechadas):
+    """
+    Completa o modelo com as restricoes adicionais da etapa 3:
+    - (E3.a): fixa os alunos de continuidade nas turmas determinadas pela Etapa 2.
+    - (E3.b): fixa os alunos de formulario atendidos nas turmas determinadas pela Etapa 1.
+    - (E3.c): fecha as turmas que devem ser fechadas, mantendo aberta somente as turmas com prioridade.
+    """
     for i, t in alunoTurmaCont:
         self.modelo.Add(self.x[i][t] == 1)
 
@@ -204,37 +210,6 @@ def addRestricoesAdicionaisEtapa3(self, alunoTurmaCont, alunoTurmaForm, turmasFe
 
     for t in turmasFechadas:
         self.modelo.Add(self.p[t] == 0)
-
-def addRestricoesAdicionaisPrioridadeParcialEtapa3(self, turmaAlunoCont, turmaAlunoForm, demandaOrdenada):
-    # Aplica as solucoes da primeira e da segunda etapa via restricoes
-    for i, t in turmaAlunoCont:
-        self.modelo.Add(self.x[i][t] == 1)
-
-    for k, t in turmaAlunoForm:
-        self.modelo.Add(self.y[k][t] == 1)
-
-    # Adiciona restricoes para priorizar turmas com maior demanda
-    keys = list(demandaOrdenada.keys())
-    for t1 in range(len(demandaOrdenada)-1):
-        t2 = t1 + 1
-        turma1 = keys[t1]
-        turma2 = keys[t2]
-        Y1 = []
-        Y2 = []
-
-        escola = turma1[0]
-        serie = turma1[1]
-        for t in self.listaTurmas[escola][serie]['turmas']:
-            if self.listaTurmas[escola][serie]['aprova'][t] == 0:
-                Y1.append(self.p[t])
-
-        escola = turma2[0]
-        serie = turma2[1]
-        for t in self.listaTurmas[escola][serie]['turmas']:
-            if self.listaTurmas[escola][serie]['aprova'][t] == 0:
-                Y2.append(self.p[t])
-
-        self.modelo.Add(sum(Y2) <= sum(Y1))
 
 ##############################
 #####  FUNCOES OBJETIVO  #####
@@ -260,7 +235,7 @@ def objMaxSomaAlunosForm(self):
     """
     Define como objetivo a maximizacao de alunos de formulario matriculados. Como a turma de destino de cada alunos de
     continuidade esta determinada a partir da primeira etapa, podemos considerar somente a maximizacao de alunos de formulario
-    nas etapas 2 e 3.
+    atendidos nas etapas 2 e 3.
     """
     Y = [self.y[k][t] for k in self.alunoForm.keys() for t in self.alunoForm[k]]
 
@@ -270,6 +245,11 @@ def objMaxSomaAlunosForm(self):
 #####  FUNCOES AUXILIARES  #####
 ################################
 def verbaDisponivel(self):
+    """
+    Dada a solucao de um modelo, retorna a verba que sobra apos utilizacao para atender todos os
+    alunos e turmas da solucao. Utilizada para verificar se a verba disponivel e suficiente
+    para atender novas turmas.
+    """
     X = [self.x[i][t].solution_value() for i in self.alunoCont.keys() for t in self.alunoCont[i]]
     Y = [self.y[k][t].solution_value() for k in self.alunoForm.keys() for t in self.alunoForm[k]]
     P = []
@@ -281,7 +261,21 @@ def verbaDisponivel(self):
     return self.verba - (self.custoAluno*(sum(X) + sum(Y)) + self.custoProf*(self.qtdProfPedag + self.qtdProfAcd)*sum(P))
 
 def pPrioriza_q(p, q, demandaOrdenada, desempateEscola, self):
-    #Demanda de p sera sempre maior ou igual a demanda de q (nas condicoes dos metodos implementados aqui)
+    """
+    Verifica a prioridade entre os tipos de turmas p e q. Retorna 'True' se p prioriza q, e 'False' caso contrario.
+
+    Como a prioridade e calculada:
+    ------------------------------
+    Obs: Primeiramente, observamos que (nas circunstancia dos metodos implementados aqui) a demanda por p sempre sera maior
+    ou igual que a demanda por q e que ambas sempre serao diferentes de zero.
+
+    A prioridade e decidida pelo seguinte processo:
+    1 - Se a diferenca e maior que 25% da capacidade da turma, p tem prioridade.
+    2 - Se a diferenca das demandas e menor ou igual a 25%, retornamos a que possuir a menor serie.
+    3 - Se as series sao iguais, olhamos para as escolas e retornamos a que possui menos alunos matriculados.
+    4 - Se o numero de matriculados ainda e igual, selecionamos a que possui menos turmas.
+    5 - Se o o numero de turmas em cada escola tambem se iguala, escolhemos aleatoriamente (distribuicao uniforme).
+    """
     if demandaOrdenada[p] - demandaOrdenada[q] <= 0.25*self.maxAlunos: #empate
         escola_p = p[0]
         serie_p = p[1]
@@ -310,6 +304,10 @@ def pPrioriza_q(p, q, demandaOrdenada, desempateEscola, self):
     return True
 
 def ordenaDemanda(demanda):
+    """
+    Dado um dicionario que armazena as demandas por cada tipo de turma, remove as turmas que possuem demanda zero
+    e ordena os elementos do dicionario de acordo com a demanda.
+    """
     demanda = {k: v for k, v in demanda.items() if v != 0}
     demandaOrdenada = {k: v for k, v in sorted(demanda.items(), key=lambda item: item[1], reverse= True)}
 
@@ -317,10 +315,12 @@ def ordenaDemanda(demanda):
 
 def armazenaSolContInicTurmasAbertasFechadas(self):
     """
-    Verifica em quais turmas cada aluno de continuidade foi alocado e armazena essa informacao para
-    uso nas Etapas 2 e 3. Tambem contabiliza o total de alunos de continuidade matriculados em uma
-    escola e o total de turmas abertas na escola. Esses dados serao utilizados para criterio de
-    desempate ao abrir turmas novas.
+    Funcao utilizada apos finalizacao da Etapa 1 (etapa de alunos de continuidade). Responsavel por construir/iniciar
+    as estruturas:
+    - 'alunoTurmaCont': armazena as tuplas (i, t), em que t e a turma em que o aluno de continuidade i foi alocado.
+    - 'turmasAbertas': turmas que devem ser mantidas abertas (nesse ponto sao somente as turmas que possuem alunos de cont.).
+    - 'turmasFechadas': turmas que devem ser mantidas fechadas (nesse ponto, e o conj. complementar das turmas abertas).
+    - 'desempateEscola': contabiliza o desempate de escolas, contando tumas abertas e alunos matriculados por escola.
     """
     alunoTurmaCont = []
     turmasAbertas = []
@@ -343,6 +343,15 @@ def armazenaSolContInicTurmasAbertasFechadas(self):
     return alunoTurmaCont, turmasAbertas, turmasFechadas, desempateEscola
 
 def iniciaDemandaOrdenadaAlunoTurmaForm(self, desempateEscola):
+    """
+    Funcao utilizada apos finalizacao da Etapa 2. Como a Etapa 2 tem o objetivo de somente completar com alunos
+    de formulario as turmas de continuidade, nao sao geradas novas turmas. Entao, coletamos a demanda geral
+    de cada turma (calculada no pre-solver) e para cada aluno de formulario adequado, removemos ele da demanda
+    e adicionamos ele no total de alunos matriculados em sua respectiva escola.
+
+    Esta funcao tem tambem o papel de iniciar a construcao da estrutura 'alunoTurmaForm', que armazena as
+    tuplas (k, t), em que t e a turma em que o aluno de formulario k foi alocado.
+    """
     demanda = {}
     alunoTurmaForm = []
     for escola in self.listaTurmas.keys():
@@ -360,9 +369,20 @@ def iniciaDemandaOrdenadaAlunoTurmaForm(self, desempateEscola):
     return demandaOrdenada, alunoTurmaForm
 
 def atualizaDadosTurmas(self, alunoTurmaForm, turmasAbertas, turmasPermitidas, turmasFechadas, demanda, desempateEscola):
+    """
+    Nessa funcao, pela construcao do metodo, a variavel 'turmasPermitidas' possui ao menos um elemento e ainda
+    estao todas na mesma escola e na mesma serie. A estrutura utilizada permite atualizar a demanda e quais turmas
+    serao abertas ou fechadas sem verificar toda a solucao encontrada, mas verificando somente a solucao envolvendo as
+    turmas permitidas.
+
+    Apos a resolucao de um modelo da etapa 3, as 'turmasPermitidas' podem ou nao virar turmas abertas. Verifica-se
+    a solucao de cada turma permitida, e se o seu p[t] associado valer 1, ela passa a ser turma aberta, caso contrario,
+    volta a ser turma fechada. Alem disso, verifica-se cada aluno de formulario matriculado nas turmas permitidas que
+    foram abertas para atualizar as variaveis 'demanda', 'desempateEscola' e 'alunoTurmaForm'.
+    """
+    print(turmasPermitidas)
     escola = turmasPermitidas[0][0]
     serie = turmasPermitidas[0][1]
-
     for t in turmasPermitidas:
         if self.p[t].solution_value() == 1:
             turmasAbertas.append(t)
@@ -378,6 +398,18 @@ def atualizaDadosTurmas(self, alunoTurmaForm, turmasAbertas, turmasPermitidas, t
     return ordenaDemanda(demanda)
 
 def avaliaTurmasPermitidas(self, turmasFechadas, demandaOrdenada, desempateEscola):
+    """
+    Essa funcao e responsavel por liberar novas turmas seguindo o criterio de demanda estipulado pela ONG.
+    Ela retorna 'None' se nao for possivel abrir novas turmas. Se possivel abrir novas turmas, ela retorna
+    uma lista nao vazia com as turmas permitidas, isto e, quais turmas podem ser abertas na resolucao do
+    proximo modelo. Alem disso, atualiza a variavel 'turmasFechadas', removendo as turmas permitidas.
+
+    Obs 1: como os dados de demanda chegam ordenados de forma decrescente sem demanda nula, se a de maior
+    demanda dominar a de segunda maior demanda, serao liberadas turmas o suficiente para 'empatar' as duas turmas,
+    evitando liberar uma turma por vez do que pode ser liberado diretamente, reduzindo o total de modelos resolvidos.
+    Se a segunda maior demanda domina a primeira, entao sabe-se que as diferenca entre as demandas e menor que 25% da
+    capacidade. Nesse caso, somente uma turma e liberada, o que e suficiente para desempatar as demandas.
+    """
     if verbaDisponivel(self) < self.custoBase:
         return None
     elif len(demandaOrdenada) == 0:
@@ -422,10 +454,8 @@ def avaliaTurmasPermitidas(self, turmasFechadas, demandaOrdenada, desempateEscol
 #####################################################################################
 def armazenaSolContInicTurmasFechadas(self):
     """
-    Verifica em quais turmas cada aluno de continuidade foi alocado e armazena essa informacao para
-    uso nas Etapas 2 e 3. Tambem contabiliza o total de alunos de continuidade matriculados em uma
-    escola e o total de turmas abertas na escola. Esses dados serao utilizados para criterio de
-    desempate ao abrir turmas novas.
+    Mesma funcionalidade da funcao 'armazenaSolContInicTurmasAbertasFechadas', entretanto, como o metodo
+    de 'prioridade parcial' nao usa da estrutura de turmas abertas, ela nao e considerada nesta funcao.
     """
     alunoTurmaCont = []
     turmasFechadas = []
@@ -445,16 +475,65 @@ def armazenaSolContInicTurmasFechadas(self):
 
     return alunoTurmaCont, turmasFechadas, desempateEscola
 
+
 def ordenaTurmasDeFormularioPrioridadeParcial(self, demandaOrdenada, desempateEscola):
+    """
+    Basicamente, dada a demanda ordenada de cada turma, aplica a relacao de demanda
+    estipulada pela ONG em toda a estrutura 'demandaOrdenada'.
+    Exemplo:
+    --------
+    Suponha que existam tres turmas, sendo p, q e r. A demanda de p e maior que a de q,
+    que por sua vez e maior que a de r. Comparamos primeiramente p com q e temos que q
+    tem prioridade sobre p. Como q prioriza p, reordenamos 'demandaOrdenada' e obtemos a
+    seguinte ordem: q, p, r. Os proximos a serem comparados sao o segundo com o terceiro,
+    isto e, p com r. Isso segue ate comparar todos os pares consecutivos.
+    """
     key_order = list(demandaOrdenada.keys())
     for c in range(len(demandaOrdenada) - 1):
         d = c + 1
         p = key_order[c]
         q = key_order[d]
-        if not pPrioriza_q(p, q, demandaOrdenada, desempateEscola, self): #Se a turma q tem prioridade sobre a turma q + 1
+        if not pPrioriza_q(p, q, demandaOrdenada, desempateEscola, self):
             aux = key_order[c]
             key_order[c] = key_order[d]
             key_order[d] = aux
             demandaOrdenada = {k: demandaOrdenada[k] for k in key_order}
 
     return demandaOrdenada
+
+def addRestricoesAdicionaisPrioridadeParcialEtapa3(self, turmaAlunoCont, turmaAlunoForm, demandaOrdenada):
+    """
+    Completa o modelo com as restricoes adicionais da etapa 3:
+    - (E3'.a): fixa os alunos de continuidade nas turmas determinadas pela Etapa 2.
+    - (E3'.b): fixa os alunos de formulario atendidos nas turmas determinadas pela Etapa 1.
+    - (E3'.c): seguindo a ordem de 'demandaOrdenada', para tipos consecutivos de turma, se um tipo possui maior prioridade, o total de turmas abertas desse tipo deve ser maior ou igual ao seu proximo tipo com menor prioridade.
+       """
+    # Aplica as solucoes da primeira e da segunda etapa via restricoes
+    for i, t in turmaAlunoCont:
+        self.modelo.Add(self.x[i][t] == 1)
+
+    for k, t in turmaAlunoForm:
+        self.modelo.Add(self.y[k][t] == 1)
+
+    # Adiciona restricoes para priorizar turmas com maior demanda
+    keys = list(demandaOrdenada.keys())
+    for t1 in range(len(demandaOrdenada)-1):
+        t2 = t1 + 1
+        turma1 = keys[t1]
+        turma2 = keys[t2]
+        P1 = []
+        P2 = []
+
+        escola = turma1[0]
+        serie = turma1[1]
+        for t in self.listaTurmas[escola][serie]['turmas']:
+            if self.listaTurmas[escola][serie]['aprova'][t] == 0:
+                P1.append(self.p[t])
+
+        escola = turma2[0]
+        serie = turma2[1]
+        for t in self.listaTurmas[escola][serie]['turmas']:
+            if self.listaTurmas[escola][serie]['aprova'][t] == 0:
+                P2.append(self.p[t])
+
+        self.modelo.Add(sum(P2) <= sum(P1))

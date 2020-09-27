@@ -1,6 +1,14 @@
 import matmov as mm
 
-MatMov = mm.modelo()
+#arquivo = 'original.db'
+#arquivo = 'original2020.db'
+#arquivo = 'otimizaNoAno.db'
+#arquivo = 'reduzirVerba.db'
+arquivo = 'juntaTurmaCont.db'
+#arquivo = 'addQuartoAnoEM.db'
+
+database = 'data/' + arquivo
+MatMov = mm.modelo(databasePath= database)
 
 MatMov.leituraDadosParametros()
 
@@ -11,3 +19,5 @@ MatMov.estatisticaSolver()
 MatMov.estatisticaProblema()
 
 MatMov.exportaSolucaoSQLite()
+
+MatMov.analiseGrafica()

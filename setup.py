@@ -19,6 +19,7 @@ setup(name= 'matmov',
             'License :: OSI Approved :: MIT License',
             'Environment :: Console',
             'Programming Language :: Python :: 3',
+            'Programming Language :: Python :: 3.7',
             'Programming Language :: Python :: 3.8',
             'Operating System :: OS Independent'
       ],
@@ -26,7 +27,8 @@ setup(name= 'matmov',
       install_requires= [
             'ortools >= 7.8.7959',
             'pandas >= 1.1.2',
-            'numpy >= 1.19.2'
+            'numpy >= 1.19.2',
+            'matplotlib >= 3.3.2'
       ],
       python_requires= '>=3.7',
 )

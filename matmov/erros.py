@@ -47,6 +47,7 @@ class ErroFalhaAoExibirResultados(Exception):
     def __str__(self):
         return 'Erro ao exibir resultados. Execute Modelo().Solver() previamente.'
 
+#####  Funcoes de busca de erros  #####
 def verificaCpfRepetido(tabelaAlunoCont, tabelaAlunoForm):
     """
     Verifica as tabelas de alunos de continuidade e de formulario buscando multiplas inscricoes de um mesmo CPF. Retorna "ErroCPFRepetido"
@@ -67,3 +68,15 @@ def verificaCpfRepetido(tabelaAlunoCont, tabelaAlunoForm):
 
         if qtdMatr > 1:
             raise ErroCPFRepetido(cpf, False, qtdMatr)
+
+def verificaTurmasContinuidade(self):
+    """
+    Verifica se existe alguma turma de alunos de continuidade com mais alunos do que o estipulado. Esse erro,
+    tratado na importacao dos dados, pode causar infactibilidade do modelo, por isso deve ser tratado antes da execucao
+    do solver.
+    """
+    for t in self.tabelaTurma.index:
+        totalMatriculas = len(self.tabelaAlunoCont[(self.tabelaAlunoCont['turma_id'] == t)].index)
+
+        if totalMatriculas > self.maxAlunos:
+            raise ErroTurmaDeContinuidadeComMuitosAlunos(self.tabelaTurma['nome'][t])

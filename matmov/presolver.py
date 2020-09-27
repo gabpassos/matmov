@@ -258,7 +258,7 @@ def verificaTurmasPossiveisParaAlunoForm(aluno, escola, serie, anoReferencia, an
 def aluno_k_antesDo_l(dataAluno_k, dataAluno_l):
     """
     Retorna 'True' se o aluno k se inscreveu antes do l e 'False' caso contrario. Em caso de empate,
-    a escolha e feita aleatoriamente.
+    a escolha e feita aleatoriamente (distribuicao uniforme).
     """
     dataInscr_k = datetime.strptime(dataAluno_k, '%d/%m/%Y %H:%M:%S')
     dataInscr_l = datetime.strptime(dataAluno_l, '%d/%m/%Y %H:%M:%S')
