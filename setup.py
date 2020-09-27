@@ -25,10 +25,10 @@ setup(name= 'matmov',
       ],
 
       install_requires= [
-            'ortools >= 7.8.7959',
-            'pandas >= 1.1.2',
-            'numpy >= 1.19.2',
-            'matplotlib >= 3.3.2'
+            'ortools >= 7.8.7959, <8.*',
+            'pandas >= 1.1.2, < 2.*',
+            'numpy >= 1.19.2, < 2.*',
+            'matplotlib >= 3.3.2, < 4.*'
       ],
       python_requires= '>=3.7',
 )

@@ -16,7 +16,7 @@ Algumas outras possibilidades para instalação através do *pip*:
 ```sh
 $ phyton -m pip install matmov
 $ pip3 install matmov
-$ python3 -m pip install matmo
+$ python3 -m pip install matmov
 ```
 Obs: a opção a ser usada pode depender de como o Python 3 está instalado no seu computador.
 
@@ -24,19 +24,19 @@ Com a instalação executada pelo *PyPI*, basta descompactar o arquivo `instalac
 
 Caso seja preferível não usar o *PyPI*, mas sim rodar diretamente com os arquivos *.py* desenvolvidos, os arquivos necessários foram encaminhados por e-mail e estão disponíveis no repositório: [https://github.com/gabpassos/matmov](https://github.com/gabpassos/matmov).
 
-PAra rodar com os arquivos do pacote na pasta, sem intslar pelo *PyPI*, basta descompactar o arquivo `instalacaoPip.zip` e executar o arquivo `main.py` como sera indicado posteriormente.
+Para rodar com os arquivos do pacote na pasta, sem instalar pelo *PyPI*, basta descompactar o arquivo `instalacaoLocal.zip` e executar o arquivo `main.py` como sera indicado posteriormente.
 
 ## Executando o programa
 O conteúdo da pasta em que o programa será executado depende do método de instalação utilizado, entretanto, os anexos enviados contemplam as duas possibilidades de forma que facilite o processo de execução e avaliação. Destacamos que tudo o que esta descrito aqui sera enviado em anexo e está também disponível no [repositório do GitHub](https://github.com/gabpassos/matmov)
 
-No local de sua preferência para executar nosso código devem haver as pastas:
+No local de sua preferência para executar nosso código devem existir (pelo menos) as pastas:
 
 - `fig`
 - `data`
 
-É importante que elas tenham esses nomes. Deve haver também um arquivo `main.py` com um conteudo apropriado (arquivo que executa os metodos do pacote desenvolvido). A pasta `fig` é o destino das figuras geradas pelo programa. A pasta `data` possui os arquivos *SQLite3* com os casos de teste que nos despertaram alguma atenção.
+É importante que elas tenham esses nomes. Deve haver também um arquivo `main.py` com um conteúdo apropriado (arquivo que executa os metodos do pacote desenvolvido). A pasta `fig` é o destino das figuras geradas pelo programa. A pasta `data` possui os arquivos *SQLite database* com os casos de teste que nos despertaram alguma atenção.
 
-Se a instalação for feita pelo *PyPI*, basta editar a main da forma que for desejável e então executar o arquivo `main.py`. Caso seja preferível rodar com os arquivos diretamente, sem instalar pelo *PyPI*, deve haver uma terceira pasta, com nome `matmov` que contém os arquivos do pacote. Em seguida,  basta editar a main da forma que for desejável e então executar o arquivo `main.py`.
+Se a instalação for feita pelo *PyPI*, basta editar a main da forma que for desejável e então executar o arquivo `main.py`. Caso seja preferível rodar com os arquivos diretamente, sem instalar pelo *PyPI*, deve haver uma terceira pasta, com nome `matmov` que contém os arquivos do pacote (enviada em anexo). Em seguida,  basta editar a main da forma que for desejável e então executar o arquivo `main.py`.
 
 ## Estrutura da `main.py`
 
@@ -80,7 +80,7 @@ Os cenários testados:
 - `juntaTurmaCont.db`: remoção de alguns alunos de continuidade para ver se o método realmente junta turmas de continuidade quando possível.
 - `addQuartoAnoEM.db`: adição do 4º ano do ensino médio.
 
-Obs: todos os cenários consideram a remoção dos CPF's repetidos e todos (exceto o `` `original.db`) tratam da inconsistência do ano de referência.
+Obs: todos os cenários consideram a remoção dos CPF's repetidos e todos (exceto o `original.db`) tratam da inconsistência do ano de referência.
 
 ## Pacotes e versões
 O pacote foi desenvolvido em Python 3 e testado nas versões Python 3.7.2 64-bit e Python 3.8.2 64-bit. Assim, espera-se que o pacote não encontre problemas em versões maiores que 3.7 do Python 3. Seguem os principais pacotes externos do Python utilizados nessa primeira versão do programa:
@@ -93,3 +93,5 @@ O pacote foi desenvolvido em Python 3 e testado nas versões Python 3.7.2 64-bit
 | *ortools* | 7.8.7959 |
 
 Foram utilizados alguns pacotes da biblioteca *standard* do Python 3: *math, sqlite3, time, datetime, string* e *statistics*. Esses pacotes não necessitam de instalação pois acompanham diretamente a instalação do Python 3.
+
+Obs: o ortools requer que a versão do Python 3 instalada seja de 64-bit.
