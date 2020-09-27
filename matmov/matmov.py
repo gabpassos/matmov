@@ -392,7 +392,6 @@ class modelo:
         ### PREPARA PARA TERCEIRA ETAPA  ###
         demandaOrdenada, alunoTurmaForm = fm.iniciaDemandaOrdenadaAlunoTurmaForm(self, desempateEscola)
         turmasPermitidas = fm.avaliaTurmasPermitidas(self, turmasFechadas, demandaOrdenada, desempateEscola)
-        print(turmasPermitidas)
 
         ################################################################################################
         #####  TERCEIRA ETAPA (abre turmas novas priorizando a demanda com criterio de desempate)  #####

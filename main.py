@@ -1,10 +1,10 @@
 import matmov as mm
 
-#arquivo = 'original.db'
+arquivo = 'original.db'
 #arquivo = 'original2020.db'
 #arquivo = 'otimizaNoAno.db'
 #arquivo = 'reduzirVerba.db'
-arquivo = 'juntaTurmaCont.db'
+#arquivo = 'juntaTurmaCont.db'
 #arquivo = 'addQuartoAnoEM.db'
 
 database = 'data/' + arquivo

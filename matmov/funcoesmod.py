@@ -380,7 +380,6 @@ def atualizaDadosTurmas(self, alunoTurmaForm, turmasAbertas, turmasPermitidas, t
     volta a ser turma fechada. Alem disso, verifica-se cada aluno de formulario matriculado nas turmas permitidas que
     foram abertas para atualizar as variaveis 'demanda', 'desempateEscola' e 'alunoTurmaForm'.
     """
-    print(turmasPermitidas)
     escola = turmasPermitidas[0][0]
     serie = turmasPermitidas[0][1]
     for t in turmasPermitidas:
@@ -429,7 +428,7 @@ def avaliaTurmasPermitidas(self, turmasFechadas, demandaOrdenada, desempateEscol
         p = key[0]
         q = key[1]
         if pPrioriza_q(p, q, demandaOrdenada, desempateEscola, self):
-            qtdNovasTurmas = ceil((demandaOrdenada[p] - demandaOrdenada[q])/self.maxAlunos)
+            qtdNovasTurmas = max([ceil((demandaOrdenada[p] - demandaOrdenada[q])/self.maxAlunos),1])
             escola = p[0]
             serie = p[1]
         else:
@@ -438,6 +437,7 @@ def avaliaTurmasPermitidas(self, turmasFechadas, demandaOrdenada, desempateEscol
             serie = q[1]
 
         contTurmas = 0
+
         for t in self.listaTurmas[escola][serie]['turmas']:
             if contTurmas < qtdNovasTurmas and self.p[t].solution_value() == 0:
                 if contTurmas < qtdNovasTurmas:
