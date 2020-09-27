@@ -1,10 +1,12 @@
 # matmov - educaMat
 Projeto back-end do Desafio Unisoma - 2020
+
 Gabriel Passos - IMECC - UNICAMP
+
 Flávia C. Gachet - FCA - UNICAMP
 
 ## Instalação
-Oferecemos duas maneiras para instalar o program. A primeira delas é manual e requer uma pasta com os arquivos do pacote desenvolvido no local em que o programa sera executado, além de instalação ou atualização manual de pacotes de terceiros (descritos na Seção Pacotes e Versões).
+Oferecemos duas maneiras para instalar o program. A primeira delas é manual e requer uma pasta com os arquivos do pacote desenvolvido no local em que o programa será executado, além de instalação ou atualização manual de pacotes de terceiros (descritos na seção Pacotes e Versões).
 
 O pacote desenvolvido também foi disponibilizado no *PyPI* para fácil instalação e execução. Nesse caso, se você possuir o *pip* instalado, basta executar:
 ```sh
@@ -18,7 +20,11 @@ $ python3 -m pip install matmo
 ```
 Obs: a opção a ser usada pode depender de como o Python 3 está instalado no seu computador.
 
-Caso seja preferível não usar o *PyPI*, mas sim rodar diretamente com os arquivos *.py*, os arquivos necessários foram encaminhados por e-mail e estão disponíveis no repositório: [https://github.com/gabpassos/matmov](https://github.com/gabpassos/matmov).
+Com a instalação executada pelo *PyPI*, basta descompactar o arquivo `instalacaoPip.zip` e executar o arquivo `main.py` como sera indicado posteriormente.
+
+Caso seja preferível não usar o *PyPI*, mas sim rodar diretamente com os arquivos *.py* desenvolvidos, os arquivos necessários foram encaminhados por e-mail e estão disponíveis no repositório: [https://github.com/gabpassos/matmov](https://github.com/gabpassos/matmov).
+
+PAra rodar com os arquivos do pacote na pasta, sem intslar pelo *PyPI*, basta descompactar o arquivo `instalacaoPip.zip` e executar o arquivo `main.py` como sera indicado posteriormente.
 
 ## Executando o programa
 O conteúdo da pasta em que o programa será executado depende do método de instalação utilizado, entretanto, os anexos enviados contemplam as duas possibilidades de forma que facilite o processo de execução e avaliação. Destacamos que tudo o que esta descrito aqui sera enviado em anexo e está também disponível no [repositório do GitHub](https://github.com/gabpassos/matmov)
