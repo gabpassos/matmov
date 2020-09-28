@@ -69,6 +69,14 @@ Ao comentar ou "descomentar" as linhas que definem a variável `arquivo`, seleci
 
 Removendo as linhas com `MatMov.estatisticaSolver()`, `MatMov.estatisticaProblema()` e `MatMov.analiseGrafica()`, as suas respectivas informações irão para de ser exibidas na tela e as figuras não serão mais geradas. Os demais metodos devem ser executados.
 
+### Observação
+Foram implementados outros dois métodos de resolução e eles ainda constam no pacote e caso queiram testar, basta trocar `MatMov.Solve()` da seguinte forma:
+```sh
+MatMov.Solve() -> MatMov.resolveSemPrioridade()
+MatMov.Solve() -> MatMov.resolveComPrioridadeParcial()
+```
+Entretanto, ressaltamos que a abordagem escolhida e explicada no relatório é a implementada no método `MatMov.Solve()`. Os demais não atendem as necessidade da ONG de forma integral.
+
 ### Resumo de instalação e execução
 - Instalação pelo *PyPI*: instalar pelo *pip* e então extrair os arquivos de `instalacaoPip.zip` e executar `main.py`.
 
