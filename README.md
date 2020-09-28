@@ -69,6 +69,11 @@ Ao comentar ou "descomentar" as linhas que definem a variável `arquivo`, seleci
 
 Removendo as linhas com `MatMov.estatisticaSolver()`, `MatMov.estatisticaProblema()` e `MatMov.analiseGrafica()`, as suas respectivas informações irão para de ser exibidas na tela e as figuras não serão mais geradas. Os demais metodos devem ser executados.
 
+### Resumo de instalação e execução
+- Instalação pelo *PyPI*: instalar pelo *pip* e então extrair os arquivos de `instalacaoPip.zip` e executar `main.py`.
+
+- Instalação pelo *PyPI*: extrair os arquivos de `instalacaoLocal.zip` e executar `main.py`.
+
 ## Um pouco sobre os cenários testados
 Fizemos poucas alterações nos dados (mas não na estrutura) da tabela SQLite. Alteramos os valores da coluna ordem de cada serie e removemos dois alunos de formulario repetidos.
 
