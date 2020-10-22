@@ -7,6 +7,7 @@ from ortools.linear_solver import pywraplp
 from matmov import erros
 from matmov import presolver as ps
 from matmov import funcoesmod as fm
+from matmov import funcoesmodopt as fmOpt
 from matmov import resultados as res
 
 class modelo:
@@ -122,6 +123,16 @@ class modelo:
         self.tempoExecPreSolver = None
         self.tempoExecTotal = None
 
+        #Armazena solucoes
+        self.xSol = {}
+        self.xSolTotalMatric = 0
+
+        self.ySol = {}
+        self.ySolTotalMatric = 0
+
+        self.pSol = {}
+        self.pSolTotalAbertas = 0
+
     def leituraDadosParametros(self):
         '''
         LEITURA DE DADOS E PARAMETROS
@@ -166,152 +177,6 @@ class modelo:
         erros.verificaTurmasContinuidade(self)
 
         self.dadosParametrosConfigurados = True
-
-    def resolveSemPrioridade(self):
-        """
-        Resolve o problema, mas nao de forma completa. Considera todas as restricoes impostas na descricao,
-        exceto a prioridade das turmas e a maximizacao de alunos por turma.
-
-        Variaveis:
-        ---------
-        Variaveis basicas de alunos de continuidade e de formulario, e as variaveis de turma.
-
-        Restricoes:
-        -----------
-        Restricoes do modelo base padrao, sem restricoes adicionais.
-
-        F. obj:
-        -------
-        Maximiza a soma de alunos atendidos.
-        """
-        if not self.dadosParametrosConfigurados:
-            raise erros.ErroLeituraDadosParametros()
-
-        t_i = time.time()
-        self.tempoExecPreSolver = ps.preSolver(self)
-
-        self.modelo = pywraplp.Solver.CreateSolver('MatMovSolver_SemPrioridade', self.tipoSolver)
-        self.modelo.SetTimeLimit(self.tempoLimiteSolver*(10**3))
-
-        ##  Variaveis  ##
-        fm.defineVariavelAlunoCont_x(self)
-        fm.defineVariavelAlunoForm_y(self)
-        fm.defineVariavelTurma_p(self)
-
-        ##  Restricoes  ##
-        fm.addRestricoesModeloBase(self)
-
-        ##  Funcao Objetivo  ##
-        fm.objMaxSomaTodosAlunos(self)
-
-        ##  Resolucao do modelo  ##
-        self.status = self.modelo.Solve()
-
-        if self.status == pywraplp.Solver.INFEASIBLE:
-            raise erros.ErroVerbaInsufParaContinuidade()
-
-        t_f = time.time()
-        self.tempoExecTotal = t_f - t_i
-
-        self.aplicouSolver = True
-
-    def resolveComPrioridadeParcial(self):
-        """
-        Resolve com prioridade parcial, isto e, sem hipoteses sobre os dados do problem, nao e possivel garantir que
-        a ordem de prioridade por demanda estipulada pela ONG seja respeitada. Esse metodo e dividido em tres etapas:
-        - Etapa 1: aloca primeiro os alunos de continuidade, sem se preocupar com alunos de formulario.
-        - Etapa 2: completa com alunos de formulario as turmas abertas para alunos de continuidade na Etapa 1.
-        - Etapa 3: aloca as novas turmas seguindo a ordem parcial.
-
-        Implementacao
-        -------------
-        Foram implementadas algumas estruturas auxiliares:
-        - alunoTurmaCont: lista que armazena a tupla (i,t) se o aluno de continuidade i esta matriculado na turma t.
-        - turmasFechadas: armazena as turmas que devem ser fechadas (utilizada para para gerar as restricoes adicionais).
-        - demandaOrdenada: armazena as demandas ordenadas.
-        - desempateEscola: armazena o total de alunos matriculados e o total de turmas abertas numa determinada escola.
-
-        Obs: como os erros tratados aqui garantem que a distribuicao de alunos de continuidade esteja bem definida,
-        se a Etapa 1 resultar em um modelo infactivel, isso e sinal de que a verba disponibilizada nao e suficiente
-        para atender os alunos de continuidade.
-        """
-        if not self.dadosParametrosConfigurados:
-            raise erros.ErroLeituraDadosParametros()
-
-        t_i = time.time()
-        self.tempoExecPreSolver = ps.preSolver(self)
-
-        self.modelo = pywraplp.Solver.CreateSolver('MatMovSolver_PrioridadeParcial', self.tipoSolver)
-        self.modelo.SetTimeLimit(self.tempoLimiteSolver*(10**3))
-
-        ##########################################################
-        #####  PRIMEIRA ETAPA (aloca alunos de continuidade) #####
-        ##########################################################
-        ##  Variaveis  ##
-        fm.defineVariavelAlunoCont_x(self)
-        fm.defineVariavelTurma_p(self)
-
-        ##  Restricoes  ##
-        fm.addRestricoesEtapaContinuidade(self)
-
-        ##  Funcao Objetivo  ##
-        fm.objMinSomaTurmas(self)
-
-        ## Resolve para alunos de continuidade  ##
-        self.status = self.modelo.Solve()
-
-        if self.status == pywraplp.Solver.INFEASIBLE:
-            raise erros.ErroVerbaInsufParaContinuidade()
-
-        #####  PREPARA PARA SEGUNDA ETAPA  #####
-        alunoTurmaCont, turmasFechadas, desempateEscola = fm.armazenaSolContInicTurmasFechadas(self)
-        self.modelo.Clear()
-
-        ###############################################################
-        #####  SEGUNDA ETAPA (preenche com alunos de formulario)  #####
-        ###############################################################
-        ##  Variaveis  ##
-        fm.defineVariavelAlunoCont_x(self)
-        fm.defineVariavelAlunoForm_y(self)
-        fm.defineVariavelTurma_p(self)
-
-        ##  Restricoes  ##
-        fm.addRestricoesModeloBase(self)
-        fm.addRestricoesAdicionaisEtapa2(self, alunoTurmaCont, turmasFechadas)
-
-        ##  Funcao Objetivo  ##
-        fm.objMaxSomaAlunosForm(self)
-
-        ##  Resolve completando as turmas de alunos de continuidade  ##
-        self.status = self.modelo.Solve()
-
-        ### PREPARA PARA TERCEIRA ETAPA  ###
-        demandaOrdenada, alunoTurmaForm = fm.iniciaDemandaOrdenadaAlunoTurmaForm(self, desempateEscola)
-        demandaOrdenada = fm.ordenaTurmasDeFormularioPrioridadeParcial(self, demandaOrdenada, desempateEscola)
-        self.modelo.Clear()
-
-        ################################################################################################
-        #####  TERCEIRA ETAPA (abre turmas novas priorizando a demanda com criterio de desempate)  #####
-        ################################################################################################
-        ##  Variaveis  ##
-        fm.defineVariavelAlunoCont_x(self)
-        fm.defineVariavelAlunoForm_y(self)
-        fm.defineVariavelTurma_p(self)
-
-        ##  Restricoes  ##
-        fm.addRestricoesModeloBase(self)
-        fm.addRestricoesAdicionaisPrioridadeParcialEtapa3(self, alunoTurmaCont, alunoTurmaForm, demandaOrdenada)
-
-        #####  Funcao Objetivo  #####
-        fm.objMaxSomaAlunosForm(self)
-
-        #####  Resolve liberando novas turmas e priorizando demanda #####
-        self.status = self.modelo.Solve()
-
-        t_f = time.time()
-        self.tempoExecTotal = t_f - t_i
-
-        self.aplicouSolver = True
 
     def Solve(self):
         """
@@ -424,6 +289,96 @@ class modelo:
         self.tempoExecTotal = t_f - t_i
 
         self.aplicouSolver = True
+
+    def SolveOpt(self):
+        if not self.dadosParametrosConfigurados:
+            raise erros.ErroLeituraDadosParametros()
+
+        t_i = time.time()
+        self.tempoExecPreSolver = ps.preSolver(self)
+
+        self.modelo = pywraplp.Solver.CreateSolver('MatMov_Solver', self.tipoSolver)
+        self.modelo.SetTimeLimit(self.tempoLimiteSolver*(10**3))
+
+        if True: ##Existem alunos de continuidade
+            ############################
+            #####  PRIMEIRA ETAPA  #####
+            ############################
+            fmOpt.addVariaveisDecisaoEtapa1(self)
+            fmOpt.addRestricoesEtapa1(self)
+            fmOpt.addObjetivoMinTurmas(self)
+
+            self.modelo.Solve()
+            fmOpt.armazenaSolucaoEtapa1(self)
+
+            self.modelo.Clear()
+            fmOpt.limpaModelo(self)
+
+            ###########################
+            #####  SEGUNDA ETAPA  #####
+            ###########################
+            Tc, vagasTc, verbaDisp = fmOpt.preparaEtapa2(self)
+            if verbaDisp < 0:
+                erros.ErroVerbaInsufParaContinuidadeNOVO(abs(verbaDisp))
+
+            if verbaDisp >= self.custoBase:
+                fmOpt.addVariaveisDecisaoEtapa2(self, Tc)
+                fmOpt.addRestricoesEtapa2(self, Tc, vagasTc, verbaDisp)
+                fmOpt.addObjetivoMaxAlunosForm(self)
+
+                self.modelo.Solve()
+                fmOpt.armazenaSolucaoEtapa2(self)
+
+                self.modelo.Clear()
+                fmOpt.limpaModelo(self)
+
+        ############################
+        #####  TERCEIRA ETAPA  #####
+        ############################
+        demandaOrdenada, desempateEscola = fmOpt.preparaEtapa3(self)
+        turmasPermitidas, verbaDisp = fmOpt.avaliaTurmasPermitidas(self, demandaOrdenada,
+                                                                   desempateEscola)
+
+        while not turmasPermitidas is None:
+            #print(demandaOrdenada)
+            #print(desempateEscola)
+
+            fmOpt.addVariaveisDecisaoEtapa3(self, turmasPermitidas)
+            fmOpt.addRestricoesEtapa3(self, turmasPermitidas, verbaDisp)
+            fmOpt.addObjetivoMaxAlunosFormEtapa3(self, turmasPermitidas)
+
+            self.modelo.Solve()
+            fmOpt.armazenaSolucaoEtapa3(self, turmasPermitidas)
+
+            demandaOrdenada, desempateEscola = fmOpt.atualizaDemandaOrdenadaDesempate(
+                                    self, turmasPermitidas,
+                                    demandaOrdenada, desempateEscola
+                                    )
+
+            turmasPermitidas, verbaDisp = fmOpt.avaliaTurmasPermitidas(
+                                    self, demandaOrdenada, desempateEscola
+                                    )
+
+            self.modelo.Clear()
+            fmOpt.limpaModelo(self)
+
+        t_f = time.time()
+        self.tempoExecTotal = t_f - t_i
+
+        self.aplicouSolver = True
+
+
+
+
+
+
+
+
+
+
+
+
+
 
     def estatisticaProblema(self):
         """

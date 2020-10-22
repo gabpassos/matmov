@@ -10,10 +10,19 @@ class ErroSerieContinuidadeFechada(Exception):
     def __str__(self):
         return 'ERRO! A serie "{}" esta fechada. Para atender a demanda dos alunos de continuidade ela deve ser aberta.'.format(self.serie)
 
+###### Sera inutilizado
 class ErroVerbaInsufParaContinuidade(Exception):
     """ Erro exibido se a verba disponibilizada nao e suficiente para alocar os alunos de continuidade. """
     def __str__(self):
         return 'A verba disponibilizada nao e suficiente para atender os alunos de continuidade.'
+
+class ErroVerbaInsufParaContinuidadeNOVO(Exception):
+    """ Erro exibido se a verba disponibilizada nao e suficiente para alocar os alunos de continuidade. """
+    def __init__(self, verbaFaltante):
+        self.verbaFaltante = verbaFaltante
+
+    def __str__(self):
+        return 'Os alunos de continuidade foram alocados excedendo a verba disponilizada  em {}'.format(self.verbaFaltante)
 
 class ErroTurmaDeContinuidadeComMuitosAlunos(Exception):
     """ Erro exibido se uma turma de alunos de continuidade possui mais matriculados do que o permitido nos parametros. """

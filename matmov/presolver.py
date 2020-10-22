@@ -84,6 +84,7 @@ def verificaDemandaTurmas(modelo, tabelaTurma, tabelaAlunoCont, tabelaAlunoForm,
                     totalTurmas = len(modelo.listaTurmas[escola][serie]['turmas'])
                     chave = (escola, serie, totalTurmas + 1)
                 modelo.listaTurmas[escola][serie]['turmas'].append(chave)
+                modelo.pSol[chave] = 0
                 modelo.listaTurmas[escola][serie]['aprova'][chave] = 0
 
     #####  Etapa 2a: contabiliza a demanda dos alunos repetentes (caso otimizar entre os anos)  #####
@@ -143,6 +144,7 @@ def verificaDemandaTurmas(modelo, tabelaTurma, tabelaAlunoCont, tabelaAlunoForm,
             for c in range(1, qtdTurmasNovas + 1):
                 chave = (escola, serie, qtdTurmasCont + c)
                 modelo.listaTurmas[escola][serie]['turmas'].append(chave)
+                modelo.pSol[chave] = 0
                 modelo.listaTurmas[escola][serie]['aprova'][chave] = 0
 
 ####################################
@@ -219,6 +221,8 @@ def preparaDadosAlunosContinuidade(modelo, tabelaTurma, tabelaSerie, tabelaAluno
 
             modelo.mesmaTurma[i][i] = False ##  Para excluir restricoes redundantes
             modelo.alunoCont[i] = turmasPossiveis
+            modelo.xSol[i] = None
+
 
 ##################################
 #####  ALUNOS DE FORMULARIO  #####
@@ -301,6 +305,7 @@ def preparaDadosAlunosFormulario(modelo, tabelaSerie, tabelaAlunoForm, listaTurm
 
             modelo.ordemForm[k][k] = False
             modelo.alunoForm[k] = turmasPossiveis
+            modelo.ySol[k] = None
 
 ########################
 #####  PRE-SOLVER  #####
