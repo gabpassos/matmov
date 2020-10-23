@@ -340,9 +340,6 @@ class modelo:
                                                                    desempateEscola)
 
         while not turmasPermitidas is None:
-            #print(demandaOrdenada)
-            #print(desempateEscola)
-
             fmOpt.addVariaveisDecisaoEtapa3(self, turmasPermitidas)
             fmOpt.addRestricoesEtapa3(self, turmasPermitidas, verbaDisp)
             fmOpt.addObjetivoMaxAlunosFormEtapa3(self, turmasPermitidas)
@@ -365,20 +362,8 @@ class modelo:
         t_f = time.time()
         self.tempoExecTotal = t_f - t_i
 
+        fmOpt.reorganizaSol(self)
         self.aplicouSolver = True
-
-
-
-
-
-
-
-
-
-
-
-
-
 
     def estatisticaProblema(self):
         """
@@ -503,70 +488,12 @@ class modelo:
         database = sqlite3.connect(self.databasePath)
         c = database.cursor()
 
-        contadorTurmas = {}
-        for regiao in self.tabelaRegiao.index:
-            contadorTurmas[regiao] = {}
-            for serie in self.tabelaSerie[(self.tabelaSerie['ativa'] == 1)].index:
-                contadorTurmas[regiao][serie] = 0
+        identTurma = res.geraIdentTurma(self, self.tabelaSerie, self.tabelaEscola,
+                                        self.tabelaRegiao)
 
-        ###Adiciona turmas
-        c.execute('DELETE FROM sol_turma')
-        c.execute('DELETE FROM sol_aluno')
-        c.execute('DELETE FROM sol_priorizacao_formulario')
-        turma_id = 0
-        alunoCont_id = 0
-        alunoForm_id = 0
-        for escola in self.listaTurmas.keys():
-            regiao = self.tabelaEscola['regiao_id'][escola]
-            for serie in self.listaTurmas[escola].keys():
-                for t in self.listaTurmas[escola][serie]['turmas']:
-                    if self.p[t].solution_value() == 1:
-                        turma_id = turma_id + 1
-
-                        ###Adiciona alunos de continuidade
-                        for i in self.listaTurmas[escola][serie]['alunosPossiveis']['cont']:
-                            if self.x[i][t].solution_value() == 1:
-                                alunoCont_id = alunoCont_id + 1
-                                cpf = self.tabelaAlunoCont['cpf'][i]
-                                nome = self.tabelaAlunoCont['nome'][i]
-                                email = self.tabelaAlunoCont['email'][i]
-                                telefone = self.tabelaAlunoCont['telefone'][i]
-                                responsavel = self.tabelaAlunoCont['nome_responsavel'][i]
-                                telResp = self.tabelaAlunoCont['telefone_responsavel'][i]
-                                origem = self.tabelaAlunoCont['nome_escola_origem'][i]
-
-                                linha = (alunoCont_id, cpf, nome, email, telefone, responsavel, telResp, origem, turma_id)
-
-                                self.listaTurmas[escola][serie]['aprova'][t] = 1 #Aprova a turma se tiver algum aluno de continuidade
-
-                                c.execute('INSERT INTO sol_aluno VALUES (?,?,?,?,?,?,?,?,?)', linha)
-
-                        for i in self.listaTurmas[escola][serie]['alunosPossiveis']['form']:
-                            if self.y[i][t].solution_value() == 1:
-                                alunoForm_id = alunoForm_id + 1
-                                cpf = self.tabelaAlunoForm['cpf'][i]
-                                nome = self.tabelaAlunoForm['nome'][i]
-                                email = self.tabelaAlunoForm['email_aluno'][i]
-                                telefone = self.tabelaAlunoForm['telefone_aluno'][i]
-                                responsavel = self.tabelaAlunoForm['nome_responsavel'][i]
-                                telResp = self.tabelaAlunoForm['telefone_responsavel'][i]
-                                origem = self.tabelaAlunoForm['nome_escola_origem'][i]
-
-                                linha = (alunoForm_id, nome, cpf, email, telefone, responsavel, telResp, int(escola), int(serie), origem, turma_id, None)
-
-                                c.execute('INSERT INTO sol_priorizacao_formulario VALUES (?,?,?,?,?,?,?,?,?,?,?,?)', linha)
-
-                        ###Adiciona turma
-                        nome = res.geraNomeTurma(regiao, serie, contadorTurmas, self.tabelaSerie, self.tabelaEscola, self.tabelaRegiao)
-
-                        if len(self.tabelaTurma[(self.tabelaTurma['nome'] == nome)].index) > 0:
-                            self.listaTurmas[escola][serie]['aprova'][t] = 1 #Aprova a turma se ela existia
-
-                        aprova = self.listaTurmas[escola][serie]['aprova'][t]
-                        linha = (turma_id, nome, self.maxAlunos, self.qtdProfAcd, self.qtdProfPedag, int(escola), int(serie), aprova)
-                        c.execute('INSERT INTO sol_turma VALUES (?,?,?,?,?,?,?,?)', linha)
-
-                        contadorTurmas[regiao][serie] = contadorTurmas[regiao][serie] + 1
+        res.attTabelaSolucao_sol_aluno(self, c, identTurma)
+        res.attTabelaSolucao_sol_priorizacao_formulario(self, c, identTurma)
+        res.attTabelaSolucao_sol_turma(self, c, identTurma)
 
         database.commit()
         database.close()

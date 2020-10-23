@@ -534,3 +534,35 @@ def limpaModelo(self):
     self.x = {}
     self.y = {}
     self.p = {}
+
+class dv():
+    def __init__(self, b):
+        self.b = b
+
+    def solution_value(self):
+        return self.b
+
+def reorganizaSol(self):
+    limpaModelo(self)
+
+    for i in self.alunoCont.keys():
+        self.x[i] = {}
+        for t in self.alunoCont[i]:
+            if self.xSol[i] == t:
+                self.x[i][t] = dv(1)
+            else:
+                self.x[i][t] = dv(0)
+
+    for k in self.alunoForm.keys():
+        self.y[k] = {}
+        for t in self.alunoForm[k]:
+            if self.ySol[k] == t:
+                self.y[k][t] = dv(1)
+            else:
+                self.y[k][t] = dv(0)
+
+    for t in self.pSol.keys():
+        if self.pSol[t] == 1:
+            self.p[t] = dv(1)
+        else:
+            self.p[t] = dv(0)
