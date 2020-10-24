@@ -40,14 +40,23 @@ def geraIdentTurma(self, tabelaSerie, tabelaEscola, tabelaRegiao):
 
 def criaColunasTurmas(self):
     colunaTurmas = []
-    for ordem in range(1, len(self.tabelaTurma.index) + 1):
-        linha = (self.tabelaTurma['ordem'] == ordem)
-        if self.tabelaTurma[linha]['ativa'] == 1:
-            nome = self.tabelaTurma[linha]['nome']
+    for ordem in range(1, len(self.tabelaSerie.index) + 1):
+        serie = self.tabelaSerie[(self.tabelaSerie['ordem'] == ordem)].index[0]
+        if self.tabelaSerie['ativa'][serie] == 1:
+            nome = self.tabelaSerie['nome'][serie]
             ano = nome[0]
-            colunaTurmas.append('turmas_{} INTEGER NOT NULL, '.format(ano))
+            colunaTurmas.append('total_turmas_{} INTEGER NOT NULL, '.format(ano))
 
     return colunaTurmas
+
+def iniciaDistTurmas(self):
+    distTurmas = {}
+    for ordem in range(1, len(self.tabelaSerie.index) + 1):
+        serie = self.tabelaSerie[(self.tabelaSerie['ordem'] == ordem)].index[0]
+        if self.tabelaSerie['ativa'][serie] == 1:
+            distTurmas[serie] = 0
+
+    return distTurmas
 
 def attTabelaSolucao_sol_aluno(self, c, identTurma):
     c.execute('DELETE FROM sol_aluno')
@@ -102,7 +111,7 @@ def attTabelaSolucao_sol_priorizacao_formulario(self, c, identTurma):
                          int(escola), int(serie), origem, identTurma[t]['id'], None)
 
                 comando = (
-                           'INSERT INTO sol_priorizacao_formulario VALUES'
+                           'INSERT INTO sol_priorizacao_formulario VALUES '
                            '(?,?,?,?,?,?,?,?,?,?,?,?)'
                           )
                 c.execute(comando, linha)
@@ -129,7 +138,7 @@ def attTabelaSolucao_sol_turma(self, c, identTurma):
 
         c.execute('INSERT INTO sol_turma VALUES (?,?,?,?,?,?,?,?)', linha)
 
-def tabelaDistribuicaoAlunos(self, c):
+def tabelaDistribuicaoAlunos(self, c, identTurma):
     schema = ('id INTEGER PRIMARY KEY NOT NULL, '
               'turma_id INTEGER NOT NULL, '
               'alunos_cont INTEGER NOT NULL, '
@@ -140,16 +149,38 @@ def tabelaDistribuicaoAlunos(self, c):
               'FOREIGN KEY (turma_id) REFERENCES sol_turma (id)'
              )
 
-    create = 'CREATE TABLE distribuicao_alunos IF NOT EXISTS ({})'.format(schema)
+    create = 'CREATE TABLE IF NOT EXISTS distribuicao_alunos ({})'.format(schema)
 
     c.execute(create)
     c.execute('DELETE FROM distribuicao_alunos')
 
-    ####edita tabela
+    ID = 1
+    for t in identTurma.keys():
+        escola = t[0]
+        serie = t[1]
 
-def tabelaDistribuicaoTurmas(self, c):
-    colunaTurmas = criaColunasTurmas(self)
+        alunosCont = 0
+        for i in self.listaTurmas[escola][serie]['alunosPossiveis']['cont']:
+            if self.x[i][t].solution_value() == 1:
+                alunosCont += 1
 
+        alunosForm = 0
+        for k in self.listaTurmas[escola][serie]['alunosPossiveis']['form']:
+            if self.y[k][t].solution_value() == 1:
+                alunosForm += 1
+
+        totalAlunos = alunosCont + alunosForm
+        metaPercentual = totalAlunos/self.maxAlunos
+
+        linha = (ID, identTurma[t]['id'], alunosCont, alunosForm, totalAlunos,
+                 self.maxAlunos, metaPercentual)
+
+        c.execute('INSERT INTO distribuicao_alunos VALUES (?,?,?,?,?,?,?)', linha)
+
+        ID += 1
+
+
+def tabelaDistribuicaoTurmas(self, c, colunaTurmas):
     schema1 = ('id INTEGER PRIMARY KEY NOT NULL, '
                'regiao_id INTEGER NOT NULL, '
                'escola_id INTEGER NOT NULL, '
@@ -163,42 +194,101 @@ def tabelaDistribuicaoTurmas(self, c):
                'FOREIGN KEY (escola_id) REFERENCES escola (id)'
               )
 
-    schema = schema1 + sum(colunaTurmas) + schema2
+    somaColunaTurma = ''
+    for turma in colunaTurmas:
+        somaColunaTurma = somaColunaTurma + turma
+    schema = schema1 + somaColunaTurma + schema2
 
-    create = 'CREATE TABLE distribuicao_turmas IF NOT EXISTS ({})'.format(schema)
+    create = 'CREATE TABLE IF NOT EXISTS distribuicao_turmas ({})'.format(schema)
 
     c.execute(create)
     c.execute('DELETE FROM distribuicao_turmas')
 
-    ##edita tabela
+    qtdSeries = len(colunaTurmas)
+    sqlArgs = '(?,?,?,' + '?,'*qtdSeries + '?,?,?,?)'
 
-def tabelaDistribuicaoGeral(self, c):
-    colunaTurmas = criaColunasTurmas(self)
+    ID = 1
+    for escola in self.listaTurmas.keys():
+        alunosCont = 0
+        alunosForm = 0
+        distTurmas = iniciaDistTurmas(self)
+        for serie in self.listaTurmas[escola].keys():
+            for t in self.listaTurmas[escola][serie]['turmas']:
+                if self.p[t].solution_value() == 1:
+                    distTurmas[serie] += 1
+                    for i in self.listaTurmas[escola][serie]['alunosPossiveis']['cont']:
+                        if self.x[i][t].solution_value() == 1:
+                            alunosCont += 1
 
+                    for k in self.listaTurmas[escola][serie]['alunosPossiveis']['form']:
+                        if self.y[k][t].solution_value() == 1:
+                            alunosForm += 1
+
+        linha = [ID, int(self.tabelaEscola['regiao_id'][escola]), int(escola)]
+        totalTurmas = 0
+        for t in distTurmas.keys():
+            linha.append(distTurmas[t])
+            totalTurmas += distTurmas[t]
+
+        totalAlunos = alunosCont + alunosForm
+        linhaAux = [totalTurmas, alunosCont, alunosForm, totalAlunos]
+
+        linha = tuple(linha + linhaAux)
+
+        c.execute('INSERT INTO distribuicao_turmas VALUES ' + sqlArgs, linha)
+
+        ID += 1
+
+def tabelaDistribuicaoGeral(self, c, colunaTurmas):
     schema1 = 'id INTEGER PRIMARY KEY NOT NULL, '
 
     schema2 = ('total_turmas INTEGER NOT NULL, '
                'alunos_cont INTEGER NOT NULL, '
                'alunos_form INTEGER NOT NULL, '
-               'total_alunos INTEGER NOT NULL, '
+               'total_alunos INTEGER NOT NULL'
               )
 
-    schema = schema1 + sum(colunaTurmas) + schema2
+    somaColunaTurma = ''
+    for turma in colunaTurmas:
+        somaColunaTurma = somaColunaTurma + turma
+    schema = schema1 + somaColunaTurma + schema2
 
-    create = 'CREATE TABLE distribuicao_geral IF NOT EXISTS ({})'.format(schema)
+    create = 'CREATE TABLE IF NOT EXISTS distribuicao_geral ({})'.format(schema)
 
     c.execute(create)
     c.execute('DELETE FROM distribuicao_geral')
 
-    ##edita tabela
+    qtdSeries = len(colunaTurmas)
+    sqlArgs = '(?,' + '?,'*qtdSeries + '?,?,?,?)'
 
+    alunosCont = 0
+    alunosForm = 0
+    distTurmas = iniciaDistTurmas(self)
+    for escola in self.listaTurmas.keys():
+        for serie in self.listaTurmas[escola].keys():
+            for t in self.listaTurmas[escola][serie]['turmas']:
+                if self.p[t].solution_value() == 1:
+                    distTurmas[serie] += 1
+                    for i in self.listaTurmas[escola][serie]['alunosPossiveis']['cont']:
+                        if self.x[i][t].solution_value() == 1:
+                            alunosCont += 1
 
+                    for k in self.listaTurmas[escola][serie]['alunosPossiveis']['form']:
+                        if self.y[k][t].solution_value() == 1:
+                            alunosForm += 1
 
+    linha = [1]
+    totalTurmas = 0
+    for t in distTurmas.keys():
+        linha.append(distTurmas[t])
+        totalTurmas += distTurmas[t]
 
+    totalAlunos = alunosCont + alunosForm
+    linhaAux = [totalTurmas, alunosCont, alunosForm, totalAlunos]
 
+    linha = tuple(linha + linhaAux)
 
-
-
+    c.execute('INSERT INTO distribuicao_geral VALUES ' + sqlArgs, linha)
 
 def matriculasCont(self):
     """ Calcula o total de alunos de continuidade matriculados. """

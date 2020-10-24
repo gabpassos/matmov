@@ -491,9 +491,16 @@ class modelo:
         identTurma = res.geraIdentTurma(self, self.tabelaSerie, self.tabelaEscola,
                                         self.tabelaRegiao)
 
+        ##  Atualiza tabelas de solucao
         res.attTabelaSolucao_sol_aluno(self, c, identTurma)
         res.attTabelaSolucao_sol_priorizacao_formulario(self, c, identTurma)
         res.attTabelaSolucao_sol_turma(self, c, identTurma)
+
+        ##  Atualiza tabelas auxiliares
+        colunaTurmas = res.criaColunasTurmas(self)
+        res.tabelaDistribuicaoAlunos(self, c, identTurma)
+        res.tabelaDistribuicaoTurmas(self, c, colunaTurmas)
+        res.tabelaDistribuicaoGeral(self, c, colunaTurmas)
 
         database.commit()
         database.close()
