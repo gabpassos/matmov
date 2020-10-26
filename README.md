@@ -6,7 +6,8 @@ Gabriel Passos - IMECC - UNICAMP
 Flávia C. Gachet - FCA - UNICAMP
 
 ## Instalação
-Oferecemos duas maneiras para instalar o program. A primeira delas é manual e requer uma pasta com os arquivos do pacote desenvolvido no local em que o programa será executado, além de instalação ou atualização manual de pacotes de terceiros (descritos na seção Pacotes e Versões).
+Oferecemos duas maneiras para instalar o program. A primeira delas é manual e requer uma pasta com os arquivos do pacote desenvolvido no local em que o programa será executado, além de instalação ou atualização manual de pacotes de terceiros (descritos na seção Pacotes e Versões). Observamos que houve uma
+atualização da versão do *ortools*.
 
 O pacote desenvolvido também foi disponibilizado no *PyPI* para fácil instalação e execução. Nesse caso, se você possuir o *pip* instalado, basta executar:
 ```sh
@@ -114,7 +115,7 @@ O pacote foi desenvolvido em Python 3 e testado nas versões Python 3.7.2 64-bit
 | *numpy* | 1.19.2 |
 | *pandas* | 1.1.2 |
 | *matplotlib* | 3.3.2 |
-| *ortools* | 7.8.7959 |
+| *ortools* |  8.0.8283 |
 
 Foram utilizados alguns pacotes da biblioteca *standard* do Python 3: *math, sqlite3, time, datetime, string, os* e *statistics*. Esses pacotes não necessitam de instalação pois acompanham diretamente a instalação do Python 3.
 

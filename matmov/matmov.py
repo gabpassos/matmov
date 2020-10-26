@@ -249,7 +249,7 @@ class modelo:
         t_i = time.time()
         self.tempoExecPreSolver = ps.preSolver(self)
 
-        self.solver = pywraplp.Solver.CreateSolver('MatMov_Solver', self.tipoSolver)
+        self.solver = pywraplp.Solver.CreateSolver(self.tipoSolver)
         self.solver.SetTimeLimit(self.tempoLimiteSolver*(10**3))
 
         totalAlunosCont = len(self.alunoCont)
