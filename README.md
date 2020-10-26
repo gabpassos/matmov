@@ -18,6 +18,16 @@ $ phyton -m pip install matmov
 $ pip3 install matmov
 $ python3 -m pip install matmov
 ```
+
+Caso a instalação pelo *PyPI* tenha sido feita anteriormente, para atualizar, basta adicionar
+usar a flag `--upgrade`:
+```sh
+$ pip install matmov --upgrade
+$ phyton -m pip install matmov --upgrade
+$ pip3 install matmov --upgrade
+$ python3 -m pip install matmov --upgrade
+```
+
 Obs: a opção a ser usada pode depender de como o Python 3 está instalado no seu computador.
 
 Com a instalação executada pelo *PyPI*, basta descompactar o arquivo `instalacaoPip.zip` e executar o arquivo `main.py` como sera indicado posteriormente.
@@ -29,21 +39,18 @@ Para rodar com os arquivos do pacote na pasta, sem instalar pelo *PyPI*, basta d
 ## Executando o programa
 O conteúdo da pasta em que o programa será executado depende do método de instalação utilizado, entretanto, os anexos enviados contemplam as duas possibilidades de forma que facilite o processo de execução e avaliação. Destacamos que tudo o que esta descrito aqui sera enviado em anexo e está também disponível no [repositório do GitHub](https://github.com/gabpassos/matmov)
 
-No local de sua preferência para executar nosso código devem existir (pelo menos) as pastas:
+No local de sua preferência para executar nosso código deve existir a pasta `data`. Deve haver também um arquivo `main.py` com um conteúdo apropriado (arquivo que executa os metodos do pacote desenvolvido). A pasta `data` possui os arquivos *SQLite database* com os casos de teste.
 
-- `fig`
-- `data`
-
-É importante que elas tenham esses nomes. Deve haver também um arquivo `main.py` com um conteúdo apropriado (arquivo que executa os metodos do pacote desenvolvido). A pasta `fig` é o destino das figuras geradas pelo programa. A pasta `data` possui os arquivos *SQLite database* com os casos de teste que nos despertaram alguma atenção.
-
-Se a instalação for feita pelo *PyPI*, basta editar a main da forma que for desejável e então executar o arquivo `main.py`. Caso seja preferível rodar com os arquivos diretamente, sem instalar pelo *PyPI*, deve haver uma terceira pasta, com nome `matmov` que contém os arquivos do pacote (enviada em anexo). Em seguida,  basta editar a main da forma que for desejável e então executar o arquivo `main.py`.
+Se a instalação for feita pelo *PyPI*, basta editar a main da forma que for desejável e então executar o arquivo `main.py`. Caso seja preferível rodar com os arquivos diretamente, sem instalar pelo *PyPI*, deve haver uma terceira pasta, com nome `matmov` que contém os arquivos do pacote (enviada em anexo). Em seguida, basta editar a main da forma que for desejável e então executar o arquivo `main.py`.
 
 ## Estrutura da `main.py`
 
-```sh
+```python
 import matmov as mm
 
 #Para selecionar o arquivo, basta comentar as linhas de forma adequada:
+#arquivo = 'cenario_2.db'
+#arquivo = 'cenario_5.db'
 arquivo = 'original.db'
 #arquivo = 'original2020.db'
 #arquivo = 'otimizaNoAno.db'
@@ -52,40 +59,44 @@ arquivo = 'original.db'
 #arquivo = 'addQuartoAnoEM.db'
 
 ############################################
+# - Solver padrao: CP-SAT (CBC tambem pode ser utilizado)
+# - somenteTurmasObrig: variavel binaria que exibe ou nao os dados de turmas nao
+#   ativas
 database = 'data/' + arquivo
-MatMov = mm.modelo(databasePath= database)
+MatMov = mm.modelo(databasePath= database, somenteTurmasObrig= True)
 
 MatMov.leituraDadosParametros()
+
 MatMov.Solve()
+
 MatMov.exportaSolucaoSQLite()
 
 ############################################
 ##  Opcional  ##
 MatMov.estatisticaSolver()
+
 MatMov.estatisticaProblema()
+
 MatMov.analiseGrafica()
 ```
-Ao comentar ou "descomentar" as linhas que definem a variável `arquivo`, seleciona-se qual conjunto de dados será executado e resolvido.
+Ao comentar ou "descomentar" as linhas que definem a variável `arquivo`, seleciona-se
+qual conjunto de dados será executado e resolvido.
 
-Removendo as linhas com `MatMov.estatisticaSolver()`, `MatMov.estatisticaProblema()` e `MatMov.analiseGrafica()`, as suas respectivas informações irão para de ser exibidas na tela e as figuras não serão mais geradas. Os demais metodos devem ser executados.
-
-### Observação
-Foram implementados outros dois métodos de resolução e eles ainda constam no pacote e caso queiram testar, basta trocar `MatMov.Solve()` da seguinte forma:
-```sh
-MatMov.Solve() -> MatMov.resolveSemPrioridade()
-MatMov.Solve() -> MatMov.resolveComPrioridadeParcial()
-```
-Entretanto, ressaltamos que a abordagem escolhida e explicada no relatório é a implementada no método `MatMov.Solve()`. Os demais não atendem as necessidade da ONG de forma integral.
+Removendo as linhas com `MatMov.estatisticaSolver()`, `MatMov.estatisticaProblema()` e
+`MatMov.analiseGrafica()`, as suas respectivas informações irão para de ser exibidas na
+tela e as figuras não serão mais geradas ou atualizadas. Os demais metodos devem ser
+executados.
 
 ### Resumo de instalação e execução
-- Instalação pelo *PyPI*: instalar pelo *pip* e então extrair os arquivos de `instalacaoPip.zip` e executar `main.py`.
+- Instalação pelo *PyPI*: instalar pelo *pip* e então extrair os arquivos de
+`instalacaoPip.zip` e executar `main.py`.
 
-- Instalação pelo *PyPI*: extrair os arquivos de `instalacaoLocal.zip` e executar `main.py`.
+- Instalação pelo local: extrair os arquivos de `instalacaoLocal.zip` e executar `main.py`.
 
 ## Um pouco sobre os cenários testados
-Fizemos poucas alterações nos dados (mas não na estrutura) da tabela SQLite. Alteramos os valores da coluna ordem de cada serie e removemos dois alunos de formulario repetidos.
-
 Os cenários testados:
+- `cenario_2.db`: cenario enviado pela UniSoma em preparação para fase final.
+- `cenario_5.db`: cenario enviado pela UniSoma em preparação para fase final.
 - `original.db`: arquivo original.
 - `original2020.db`: encontramos uma inconsistência no ano de referência em alguns alunos de formulário. O aluno se inscreveu em 2020 mas o ano de referência é 2019. Os dados em `original2020.db` corrigem essa inconsistência.
 - `otimizaNoAno.db`: considera resolucao do problema no ano de 2020
@@ -105,6 +116,8 @@ O pacote foi desenvolvido em Python 3 e testado nas versões Python 3.7.2 64-bit
 | *matplotlib* | 3.3.2 |
 | *ortools* | 7.8.7959 |
 
-Foram utilizados alguns pacotes da biblioteca *standard* do Python 3: *math, sqlite3, time, datetime, string* e *statistics*. Esses pacotes não necessitam de instalação pois acompanham diretamente a instalação do Python 3.
+Foram utilizados alguns pacotes da biblioteca *standard* do Python 3: *math, sqlite3, time, datetime, string, os* e *statistics*. Esses pacotes não necessitam de instalação pois acompanham diretamente a instalação do Python 3.
 
-Obs: o ortools requer que a versão do Python 3 instalada seja de 64-bit.
+Obs 1: o ortools requer que a versão do Python 3 instalada seja de 64-bit.
+
+Obs 2: as funções utilizadas da biblioteca *os* são independentes de sistema operacional.
