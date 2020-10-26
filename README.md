@@ -20,15 +20,6 @@ $ pip3 install matmov
 $ python3 -m pip install matmov
 ```
 
-Caso a instalação pelo *PyPI* tenha sido feita anteriormente, para atualizar, basta adicionar
-usar a flag `--upgrade`:
-```sh
-$ pip install matmov --upgrade
-$ phyton -m pip install matmov --upgrade
-$ pip3 install matmov --upgrade
-$ python3 -m pip install matmov --upgrade
-```
-
 Obs: a opção a ser usada pode depender de como o Python 3 está instalado no seu computador.
 
 Com a instalação executada pelo *PyPI*, basta descompactar o arquivo `instalacaoPip.zip` e executar o arquivo `main.py` como sera indicado posteriormente.
